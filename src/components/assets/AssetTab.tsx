@@ -1,0 +1,219 @@
+import React, { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import {
+  Upload,
+  Video,
+  Music,
+  Image as ImageIcon,
+  Type,
+  Trash2,
+  HardDrive,
+  Plus,
+  Check,
+} from 'lucide-react';
+import { ProjectAsset } from '../../types';
+import { PillButton } from '../ui/PillButton';
+import { EmptyState } from '../ui/Skeleton';
+
+interface AssetTabProps {
+  assets: ProjectAsset[];
+  onUploadAssets: (files: File[]) => void;
+  onDeleteAsset: (id: string) => void;
+  onUseAssetInChat: (asset: ProjectAsset) => void;
+  usedBytes: number;
+  maxBytes: number;
+}
+
+type FilterType = 'all' | 'video' | 'audio' | 'image' | 'font';
+
+export const AssetTab: React.FC<AssetTabProps> = ({
+  assets,
+  onUploadAssets,
+  onDeleteAsset,
+  onUseAssetInChat,
+  usedBytes,
+  maxBytes,
+}) => {
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        onUploadAssets(acceptedFiles);
+      }
+    },
+    maxSize: 50 * 1024 * 1024, // 50MB per file
+  });
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const usedMB = (usedBytes / (1024 * 1024)).toFixed(1);
+  const maxMB = (maxBytes / (1024 * 1024)).toFixed(0);
+  const percentUsed = Math.min(100, Math.round((usedBytes / maxBytes) * 100));
+
+  const filteredAssets = assets.filter((asset) => {
+    if (filter === 'all') return true;
+    return asset.type === filter;
+  });
+
+  const getAssetIcon = (type: string) => {
+    switch (type) {
+      case 'video':
+        return <Video className="w-5 h-5 text-[#7aa7ff]" />;
+      case 'audio':
+        return <Music className="w-5 h-5 text-[#b39dff]" />;
+      case 'image':
+        return <ImageIcon className="w-5 h-5 text-[#5fd3b0]" />;
+      case 'font':
+        return <Type className="w-5 h-5 text-amber-400" />;
+      default:
+        return <Video className="w-5 h-5 text-[#8b8b94]" />;
+    }
+  };
+
+  const handleUse = (asset: ProjectAsset) => {
+    onUseAssetInChat(asset);
+    setCopiedId(asset.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#0e0e10] p-4 overflow-y-auto space-y-4 select-none safe-pb">
+      {/* 5.2 Meter Storage */}
+      <div className="bg-[#18181b] border border-[#27272c] rounded-2xl p-3.5 space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-[#f2f2f3] font-semibold">
+            <HardDrive className="w-4 h-4 text-[#8b8b94]" />
+            <span>Penyimpanan Asset</span>
+          </div>
+          <span className="text-[#8b8b94] font-mono text-[11px]">
+            {usedMB} MB / {maxMB} MB ({percentUsed}%)
+          </span>
+        </div>
+        <div className="w-full h-1.5 bg-[#222226] rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${
+              percentUsed > 85 ? 'bg-[#e5484d]' : 'bg-[#5fd3b0]'
+            }`}
+            style={{ width: `${percentUsed}%` }}
+          />
+        </div>
+        {percentUsed > 85 && (
+          <p className="text-[10px] text-[#e5484d]">
+            Peringatan: Kapasitas penyimpanan hampir penuh.
+          </p>
+        )}
+      </div>
+
+      {/* Upload Dropzone */}
+      <div
+        {...getRootProps()}
+        className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 ${
+          isDragActive
+            ? 'border-[#e5484d] bg-[#3b2427]/20'
+            : 'border-[#303036] hover:border-[#45454d] bg-[#121214]'
+        }`}
+      >
+        <input {...getInputProps()} />
+        <div className="w-10 h-10 rounded-full bg-[#222226] flex items-center justify-center text-[#e5484d]">
+          <Upload className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-[#f2f2f3]">
+            {isDragActive ? 'Lepaskan file di sini' : 'Unggah Video, Audio, atau Gambar'}
+          </p>
+          <p className="text-[11px] text-[#8b8b94] mt-0.5">
+            Maksimal 50 MB per file. Drag & drop atau sentuh untuk memilih.
+          </p>
+        </div>
+      </div>
+
+      {/* Filter Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        {[
+          { id: 'all', label: 'Semua' },
+          { id: 'video', label: 'Video' },
+          { id: 'audio', label: 'Audio' },
+          { id: 'image', label: 'Gambar' },
+          { id: 'font', label: 'Font' },
+        ].map((item) => (
+          <PillButton
+            key={item.id}
+            variant="filled"
+            size="xs"
+            active={filter === item.id}
+            onClick={() => setFilter(item.id as FilterType)}
+          >
+            {item.label}
+          </PillButton>
+        ))}
+      </div>
+
+      {/* Asset List */}
+      {filteredAssets.length === 0 ? (
+        <EmptyState
+          icon={<Video className="w-6 h-6" />}
+          title="Belum Ada Asset"
+          description="Unggah file media atau lampirkan di chat agar AI agent dapat menggunakannya dalam video."
+        />
+      ) : (
+        <div className="space-y-2">
+          {filteredAssets.map((asset) => (
+            <div
+              key={asset.id}
+              className="bg-[#18181b] border border-[#27272c] rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-[#303036] transition-colors"
+            >
+              {/* Icon badge */}
+              <div className="w-10 h-10 rounded-xl bg-[#222226] flex items-center justify-center shrink-0">
+                {getAssetIcon(asset.type)}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-[#f2f2f3] truncate">
+                  {asset.name}
+                </p>
+                <div className="flex items-center gap-2 text-[10px] text-[#8b8b94] mt-0.5 font-mono">
+                  <span>{formatSize(asset.size)}</span>
+                  {asset.duration && <span>• {asset.duration}s</span>}
+                  {asset.width && asset.height && (
+                    <span>• {asset.width}x{asset.height}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <PillButton
+                  variant="outline"
+                  size="xs"
+                  onClick={() => handleUse(asset)}
+                >
+                  {copiedId === asset.id ? (
+                    <Check className="w-3 h-3 text-[#5fd3b0]" />
+                  ) : (
+                    <Plus className="w-3 h-3 text-[#7aa7ff]" />
+                  )}
+                  <span>{copiedId === asset.id ? 'Dipakai' : 'Pakai'}</span>
+                </PillButton>
+
+                <button
+                  type="button"
+                  aria-label={`Hapus asset ${asset.name}`}
+                  onClick={() => onDeleteAsset(asset.id)}
+                  className="tap w-8 h-8 rounded-full flex items-center justify-center text-[#76767f] hover:text-red-400 hover:bg-[#222226] transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};

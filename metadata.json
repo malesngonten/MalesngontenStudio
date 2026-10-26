@@ -1,0 +1,7 @@
+{
+  "name": "Studio Hermes Remotion",
+  "description": "Studio editor video pendek berbasis AI agent untuk mobile. Tulis instruksi teks, Gemini AI mengedit proyek Remotion secara otomatis dengan preview realtime.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
