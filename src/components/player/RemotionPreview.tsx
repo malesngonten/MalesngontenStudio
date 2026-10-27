@@ -1,10 +1,17 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
-import { Play, Pause, Maximize, Plus, AlertCircle, Copy, Check, Wrench, Minimize2, Maximize2 } from 'lucide-react';
-import { TimelineData } from '../../types';
+import {
+  Play,
+  Pause,
+  Maximize,
+  RotateCcw,
+  Move,
+  Check,
+  Sparkles,
+  Layers,
+} from 'lucide-react';
+import { TimelineData, TimelineClip } from '../../types';
 import { ShortVideoComposition } from '../../remotion/ShortVideoComposition';
-import { PillButton } from '../ui/PillButton';
-import { IconButton } from '../ui/IconButton';
 
 interface RemotionPreviewProps {
   timeline: TimelineData;
@@ -12,9 +19,9 @@ interface RemotionPreviewProps {
   onFrameUpdate: (frame: number) => void;
   isPlaying: boolean;
   onPlayPauseToggle: () => void;
-  onAddLayerClick: () => void;
-  compilationError: string | null;
-  onAskAiFix: (err: string) => void;
+  selectedClipId: string | null;
+  onSelectClip: (layerId: string, clipId: string) => void;
+  onUpdateClipPosition?: (layerId: string, clipId: string, x: number, y: number) => void;
 }
 
 export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
@@ -23,50 +30,57 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   onFrameUpdate,
   isPlaying,
   onPlayPauseToggle,
-  onAddLayerClick,
-  compilationError,
-  onAskAiFix,
+  selectedClipId,
+  onSelectClip,
+  onUpdateClipPosition,
 }) => {
   const playerRef = useRef<PlayerRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
-  const [playerSize, setPlayerSize] = useState<'compact' | 'expanded'>('compact');
+  const videoFrameRef = useRef<HTMLDivElement>(null);
   const isInternalUpdateRef = useRef(false);
   const lastFrameRef = useRef(-1);
 
-  // Sync external seek (e.g. from timeline scrub/tap) to playerRef
+  // Dragging state on canvas
+  const [draggingClip, setDraggingClip] = useState<{
+    layerId: string;
+    clipId: string;
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+
+  // Sync external seek (timeline scrub) to playerRef
   useEffect(() => {
-    // If the frame update originated from player's own internal playback, skip seekTo
     if (isInternalUpdateRef.current) {
       isInternalUpdateRef.current = false;
       return;
     }
-
     if (!playerRef.current) return;
-    const player = playerRef.current;
     try {
-      const current = Math.round(player.getCurrentFrame());
+      const current = Math.round(playerRef.current.getCurrentFrame());
       if (current !== currentFrame) {
         lastFrameRef.current = currentFrame;
-        player.seekTo(currentFrame);
+        playerRef.current.seekTo(currentFrame);
       }
     } catch (e) {
-      // player might still be mounting
+      // player mounting
     }
   }, [currentFrame]);
 
   // Sync play/pause state
   useEffect(() => {
     if (!playerRef.current) return;
-    const player = playerRef.current;
     try {
-      if (isPlaying && !player.isPlaying()) {
-        player.play();
-      } else if (!isPlaying && player.isPlaying()) {
-        player.pause();
+      if (isPlaying && !playerRef.current.isPlaying()) {
+        playerRef.current.play();
+      } else if (!isPlaying && playerRef.current.isPlaying()) {
+        playerRef.current.pause();
       }
     } catch (e) {
-      // player playback error
+      // player playback
     }
   }, [isPlaying]);
 
@@ -99,94 +113,194 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     }
   }, []);
 
-  const handleCopyError = useCallback(() => {
-    if (!compilationError) return;
-    navigator.clipboard.writeText(compilationError);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [compilationError]);
+  // Format time display
+  const currentSec = (currentFrame / timeline.fps).toFixed(2);
+  const totalSec = (timeline.durationInFrames / timeline.fps).toFixed(2);
 
-  // Format frames to mm:ss
-  const formatTime = (frame: number, fps: number) => {
-    const totalSeconds = Math.floor(frame / fps);
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  // Active text clips at current frame that can be dragged
+  const activeTextClips: { layerId: string; clip: TimelineClip }[] = [];
+  timeline.layers
+    .filter((l) => l.type === 'text')
+    .forEach((layer) => {
+      layer.clips.forEach((clip) => {
+        if (currentFrame >= clip.from && currentFrame < clip.from + clip.duration) {
+          activeTextClips.push({ layerId: layer.id, clip });
+        }
+      });
+    });
+
+  // On-Canvas Drag Handlers
+  const handlePointerDown = (
+    e: React.PointerEvent,
+    layerId: string,
+    clip: TimelineClip
+  ) => {
+    if (!videoFrameRef.current || !onUpdateClipPosition) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
+    onSelectClip(layerId, clip.id);
+    if (isPlaying) {
+      onPlayPauseToggle(); // Pause to adjust
+    }
+
+    const currentX = clip.props?.x ?? 50;
+    const currentY = clip.props?.y ?? 50;
+
+    setDraggingClip({
+      layerId,
+      clipId: clip.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: currentX,
+      initialY: currentY,
+      currentX,
+      currentY,
+    });
   };
 
-  const currentTimeStr = formatTime(currentFrame, timeline.fps);
-  const totalTimeStr = formatTime(timeline.durationInFrames, timeline.fps);
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggingClip || !videoFrameRef.current || !onUpdateClipPosition) return;
+    const rect = videoFrameRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
 
-  const playerHeightClass = playerSize === 'compact' ? 'h-[185px]' : 'h-[262px]';
+    const deltaXPercent = ((e.clientX - draggingClip.startX) / rect.width) * 100;
+    const deltaYPercent = ((e.clientY - draggingClip.startY) / rect.height) * 100;
+
+    let newX = Math.round(draggingClip.initialX + deltaXPercent);
+    let newY = Math.round(draggingClip.initialY + deltaYPercent);
+
+    // Magnetic snap to center (50%)
+    if (Math.abs(newX - 50) < 3) newX = 50;
+    if (Math.abs(newY - 50) < 3) newY = 50;
+
+    newX = Math.max(8, Math.min(92, newX));
+    newY = Math.max(8, Math.min(92, newY));
+
+    setDraggingClip((prev) => (prev ? { ...prev, currentX: newX, currentY: newY } : null));
+    onUpdateClipPosition(draggingClip.layerId, draggingClip.clipId, newX, newY);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!draggingClip) return;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {
+      // ignore
+    }
+    setDraggingClip(null);
+  };
 
   return (
-    <div ref={containerRef} className="flex flex-col bg-black border-b border-[#27272c] w-full shrink-0">
-      {/* a) Player: area hitam full-bleed portrait 9:16 di tengah */}
-      <div className={`relative w-full ${playerHeightClass} transition-all duration-200 bg-black flex items-center justify-center overflow-hidden`}>
-        {compilationError ? (
-          // g) Error state: kartu error (nama file + baris, pesan monospace) dengan "Minta AI perbaiki" & "Salin error"
-          <div className="w-[90%] max-w-[340px] bg-[#18181b] border border-[#e5484d]/50 rounded-2xl p-4 shadow-xl flex flex-col justify-between my-auto">
-            <div className="flex items-center gap-2 text-[#e5484d] font-semibold text-xs mb-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Gagal Mengompilasi Remotion</span>
+    <div
+      ref={containerRef}
+      className="w-full h-full flex flex-col bg-[#0d0d10] select-none relative overflow-hidden"
+    >
+      {/* Video Viewport Area */}
+      <div className="flex-1 relative flex items-center justify-center p-2 min-h-0 bg-radial from-[#15151a] to-[#0a0a0c]">
+        {/* Aspect Ratio 9:16 Frame */}
+        <div
+          ref={videoFrameRef}
+          className="h-full aspect-[9/16] bg-black shadow-2xl relative flex items-center justify-center overflow-hidden rounded-xl border border-[#232329]"
+          style={{ maxHeight: '100%' }}
+        >
+          {/* Remotion Player */}
+          <Player
+            ref={playerRef}
+            component={ShortVideoComposition}
+            inputProps={{ timeline }}
+            durationInFrames={timeline.durationInFrames}
+            fps={timeline.fps}
+            compositionWidth={timeline.width}
+            compositionHeight={timeline.height}
+            style={{
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+            }}
+            controls={false}
+            autoPlay={false}
+            loop
+          />
+
+          {/* Center Crosshair Guidelines when dragging near center */}
+          {draggingClip && draggingClip.currentX === 50 && (
+            <div className="absolute inset-y-0 left-1/2 w-[1px] bg-red-500/70 pointer-events-none z-40" />
+          )}
+          {draggingClip && draggingClip.currentY === 50 && (
+            <div className="absolute inset-x-0 top-1/2 h-[1px] bg-red-500/70 pointer-events-none z-40" />
+          )}
+
+          {/* Interactive Drag & Drop Overlay on Active Text Elements */}
+          {!isPlaying &&
+            activeTextClips.map(({ layerId, clip }) => {
+              const isSelected = selectedClipId === clip.id;
+              const posX = clip.props?.x ?? 50;
+              const posY = clip.props?.y ?? 50;
+
+              return (
+                <div
+                  key={clip.id}
+                  onPointerDown={(e) => handlePointerDown(e, layerId, clip)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  style={{
+                    position: 'absolute',
+                    top: `${posY}%`,
+                    left: `${posX}%`,
+                    transform: 'translate(-50%, -50%)',
+                    touchAction: 'none',
+                  }}
+                  className={`cursor-move select-none z-30 transition-shadow ${
+                    isSelected
+                      ? 'ring-2 ring-[#e5484d] ring-offset-2 ring-offset-black/60 rounded-xl'
+                      : 'hover:ring-1 hover:ring-white/50 rounded-xl'
+                  }`}
+                >
+                  <div className="p-2 relative group">
+                    {/* Drag Handle Tag */}
+                    {isSelected && (
+                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#e5484d] text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md whitespace-nowrap pointer-events-none">
+                        <Move className="w-2.5 h-2.5" />
+                        <span>Geser ({posX}%, {posY}%)</span>
+                      </div>
+                    )}
+                    {/* Ghost hit target matching text */}
+                    <div className="opacity-0 pointer-events-none text-center px-4 py-2 font-extrabold text-sm whitespace-nowrap">
+                      {clip.props?.text || clip.name}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+          {/* Pause / Drag Hint Overlay */}
+          {!isPlaying && (
+            <div className="absolute top-2 left-2 z-20 pointer-events-none bg-black/60 backdrop-blur-xs text-[#8f8f9c] text-[10px] px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1">
+              <Move className="w-2.5 h-2.5 text-[#e5484d]" />
+              <span>Drag teks untuk ubah posisi</span>
             </div>
-            <pre className="text-[11px] font-code text-[#f2f2f3] bg-[#0a0a0b] p-2.5 rounded-xl border border-[#27272c] max-h-24 overflow-y-auto whitespace-pre-wrap select-text mb-3">
-              {compilationError}
-            </pre>
-            <div className="flex items-center gap-2">
-              <PillButton
-                variant="red"
-                onClick={() => onAskAiFix(compilationError)}
-                className="flex-1"
-              >
-                <Wrench className="w-3.5 h-3.5" />
-                Minta AI perbaiki
-              </PillButton>
-              <PillButton
-                variant="outline"
-                onClick={handleCopyError}
-                className="shrink-0"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-[#5fd3b0]" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? 'Tersalin' : 'Salin'}
-              </PillButton>
-            </div>
+          )}
+
+          {/* Resolution Badge */}
+          <div className="absolute top-2 right-2 z-20 pointer-events-none bg-black/60 backdrop-blur-xs text-[#8f8f9c] text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10">
+            9:16 • 1080p
           </div>
-        ) : (
-          // Video 9:16 frame container
-          <div
-            className="h-full aspect-[9/16] bg-black shadow-2xl relative flex items-center justify-center transition-all duration-200"
-            style={{ aspectRatio: `${timeline.width} / ${timeline.height}` }}
-          >
-            <Player
-              ref={playerRef}
-              component={ShortVideoComposition}
-              inputProps={{ timeline }}
-              durationInFrames={timeline.durationInFrames}
-              fps={timeline.fps}
-              compositionWidth={timeline.width}
-              compositionHeight={timeline.height}
-              style={{
-                width: '100%',
-                height: '100%',
-              }}
-              controls={false}
-              autoPlay={false}
-              loop
-            />
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* b) Baris kontrol 40px: Play/Pause, waktu, spacer, + Layer, Fullscreen */}
-      <div className="h-[40px] px-3 bg-[#121214] border-t border-[#27272c] flex items-center justify-between gap-2 select-none shrink-0">
-        <div className="flex items-center gap-2">
-          {/* Play/Pause: ikon putih terisi, min 44x44 tap area */}
+      {/* Control Bar */}
+      <div className="h-[42px] px-3 bg-[#111114] border-t border-[#232329] flex items-center justify-between gap-3 shrink-0 z-20">
+        <div className="flex items-center gap-2.5">
+          {/* Play/Pause Button */}
           <button
             type="button"
-            aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
             onClick={onPlayPauseToggle}
-            className="tap w-9 h-9 rounded-full bg-[#222226] hover:bg-[#2c2c31] border border-[#303036] flex items-center justify-center text-white active:scale-95 transition-transform"
+            className="tap w-8 h-8 rounded-full bg-[#c92a2a] hover:bg-[#b02525] flex items-center justify-center text-white active:scale-95 transition-all shadow-md"
+            aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-white" />
@@ -195,39 +309,37 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             )}
           </button>
 
-          {/* Time display: nowrap, tabular-nums */}
-          <span className="text-xs font-mono font-medium text-[#8b8b94] whitespace-nowrap tabular-nums">
-            <span className="text-[#f2f2f3] font-semibold">{currentTimeStr}</span> / {totalTimeStr}
-          </span>
+          {/* Time & Frame Counter */}
+          <div className="flex items-center gap-1.5 text-xs font-mono tabular-nums">
+            <span className="text-white font-semibold">{currentSec}s</span>
+            <span className="text-[#656570]">/ {totalSec}s</span>
+            <span className="text-[10px] text-[#656570] bg-[#1a1a20] px-1.5 py-0.5 rounded border border-[#272733]">
+              F{currentFrame}
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {/* Pill "+ Layer" bergaris */}
-          <PillButton
-            variant="red"
-            size="sm"
-            onClick={onAddLayerClick}
-            aria-label="Tambah Layer Baru"
+        {/* Right Tools */}
+        <div className="flex items-center gap-2">
+          {/* Reset to Start */}
+          <button
+            type="button"
+            onClick={() => onFrameUpdate(0)}
+            title="Ulangi dari frame 0"
+            className="tap w-7 h-7 rounded-md flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Layer</span>
-          </PillButton>
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
 
-          {/* Toggle Ukuran Preview (Compact vs Expanded) */}
-          <IconButton
-            icon={playerSize === 'compact' ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
-            aria-label={playerSize === 'compact' ? 'Perbesar preview video' : 'Perkecil preview video'}
-            size="sm"
-            onClick={() => setPlayerSize(playerSize === 'compact' ? 'expanded' : 'compact')}
-          />
-
-          {/* Tombol Fullscreen */}
-          <IconButton
-            icon={<Maximize className="w-4 h-4" />}
-            aria-label="Layar penuh"
-            size="sm"
+          {/* Fullscreen */}
+          <button
+            type="button"
             onClick={handleFullscreen}
-          />
+            title="Layar Penuh"
+            className="tap w-7 h-7 rounded-md flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] transition-colors"
+          >
+            <Maximize className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>

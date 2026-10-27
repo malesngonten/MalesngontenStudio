@@ -1,191 +1,146 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Play,
-  ChevronDown,
   MessageSquare,
   Sliders,
-  BookOpen,
-  RefreshCw,
+  Sparkles,
+  Maximize2,
+  Columns2,
+  SplitSquareVertical,
   Plus,
-  Check,
 } from 'lucide-react';
-import { IconButton } from '../ui/IconButton';
+import { AgentStatus } from '../../contracts/agentProtocol';
 
 interface HeaderProps {
-  currentProject: string;
-  projectList: string[];
-  onSelectProject: (name: string) => void;
-  onCreateNewProject: () => void;
-  agentStatus: 'connected' | 'working' | 'disconnected';
-  onReconnectAgent: () => void;
+  agentStatus: AgentStatus;
+  sessionsCount: number;
+  activeSessionTitle?: string;
+  splitMode: '50-50' | 'player-focus' | 'chat-focus';
+  onToggleSplitMode: () => void;
   onOpenChatHistory: () => void;
-  onOpenProjectRules: () => void;
-  onOpenAgentSettings: () => void;
+  onOpenSettings: () => void;
+  onNewChat: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentProject,
-  projectList,
-  onSelectProject,
-  onCreateNewProject,
   agentStatus,
-  onReconnectAgent,
+  sessionsCount,
+  activeSessionTitle,
+  splitMode,
+  onToggleSplitMode,
   onOpenChatHistory,
-  onOpenProjectRules,
-  onOpenAgentSettings,
+  onOpenSettings,
+  onNewChat,
 }) => {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  const getStatusColor = () => {
+  const getStatusBadge = () => {
     switch (agentStatus) {
-      case 'connected':
-        return 'bg-[#5fd3b0]'; // green
-      case 'working':
-        return 'bg-amber-400 animate-pulse'; // yellow
-      case 'disconnected':
-        return 'bg-[#e5484d]'; // red
-    }
-  };
-
-  const getStatusLabel = () => {
-    switch (agentStatus) {
-      case 'connected':
-        return 'Agent Terhubung';
-      case 'working':
-        return 'Agent Bekerja';
-      case 'disconnected':
-        return 'Agent Terputus';
+      case 'thinking':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-300 bg-amber-950/60 border border-amber-700/50 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+            <span>Agent Berpikir...</span>
+          </span>
+        );
+      case 'executing_tool':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            <span>Eksekusi Tool ACP</span>
+          </span>
+        );
+      case 'streaming':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-purple-300 bg-purple-950/60 border border-purple-700/50 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+            <span>Menulis Kode...</span>
+          </span>
+        );
+      case 'connecting':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 bg-slate-800/60 border border-slate-700 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
+            <span>Menghubungkan...</span>
+          </span>
+        );
+      case 'idle':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-950/50 border border-emerald-800/40 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>ACP Siap</span>
+          </span>
+        );
     }
   };
 
   return (
-    <header className="h-[50px] px-3 bg-[#121214] border-b border-[#27272c] flex items-center justify-between gap-2 select-none relative z-30">
-      {/* Left: Logo & Project Switcher */}
-      <div className="flex items-center gap-2.5 min-w-0">
-        {/* Logo kotak rounded 8px merah 28px berisi ikon Play putih */}
-        <div className="w-[28px] h-[28px] rounded-[8px] bg-[#e5484d] flex items-center justify-center shrink-0 shadow-sm">
-          <Play className="w-3.5 h-3.5 fill-white text-white translate-x-[1px]" />
+    <header className="h-[48px] bg-[#111114] border-b border-[#24242a] px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
+      {/* Brand & Logo */}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="w-7 h-7 rounded-lg overflow-hidden bg-[#c92a2a] shrink-0 border border-red-500/40 shadow-sm flex items-center justify-center">
+          <img
+            src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
+            alt="Males Ngonten Logo"
+            className="w-full h-full object-cover"
+          />
         </div>
-
-        {/* Project Name dropdown + Subtitle */}
-        <div className="relative min-w-0">
-          <button
-            type="button"
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="tap flex items-center gap-1 group text-left max-w-[170px]"
-            aria-label="Pilih Proyek"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-[15px] font-semibold text-[#f2f2f3] truncate leading-tight group-hover:text-white">
-                  {currentProject}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-[#8b8b94] group-hover:text-white shrink-0" />
-              </div>
-              <span className="text-[10px] text-[#8b8b94] block leading-none">
-                Studio Hermes
-              </span>
-            </div>
-          </button>
-
-          {/* Project dropdown menu */}
-          {isDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-56 bg-[#18181b] border border-[#303036] rounded-2xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95">
-              <div className="text-[10px] font-semibold text-[#8b8b94] uppercase px-2 py-1">
-                Daftar Proyek
-              </div>
-              {projectList.map((proj) => (
-                <button
-                  key={proj}
-                  type="button"
-                  onClick={() => {
-                    onSelectProject(proj);
-                    setIsDropdownOpen(false);
-                  }}
-                  className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs flex items-center justify-between hover:bg-[#222226] transition-colors ${
-                    proj === currentProject ? 'text-[#e5484d] font-semibold bg-[#222226]' : 'text-[#f2f2f3]'
-                  }`}
-                >
-                  <span className="truncate">{proj}</span>
-                  {proj === currentProject && <Check className="w-3.5 h-3.5 text-[#e5484d]" />}
-                </button>
-              ))}
-
-              <div className="my-1 border-t border-[#27272c]" />
-
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenProjectRules();
-                  setIsDropdownOpen(false);
-                }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs flex items-center gap-2 text-[#8b8b94] hover:text-[#f2f2f3] hover:bg-[#222226]"
-              >
-                <BookOpen className="w-3.5 h-3.5 text-[#7aa7ff]" />
-                <span>Aturan Proyek (GEMINI.md)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenAgentSettings();
-                  setIsDropdownOpen(false);
-                }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs flex items-center gap-2 text-[#8b8b94] hover:text-[#f2f2f3] hover:bg-[#222226]"
-              >
-                <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                <span>Pengaturan AI Agent</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateNewProject();
-                  setIsDropdownOpen(false);
-                }}
-                className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs flex items-center gap-2 text-[#7aa7ff] hover:bg-[#222226] font-medium mt-0.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Buat Proyek Baru</span>
-              </button>
-            </div>
-          )}
+        <div className="min-w-0 flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-white tracking-tight truncate">
+              MALES NGONTEN
+            </span>
+            <span className="text-[10px] font-bold text-[#e5484d] uppercase tracking-wider bg-red-950/70 border border-red-800/50 px-1 rounded">
+              STUDIO
+            </span>
+          </div>
+          <span className="text-[9px] text-[#858591] truncate font-mono hidden xs:inline">
+            Remotion AI Coding Engine
+          </span>
         </div>
       </div>
 
-      {/* Right: Actions & Agent Status (Spacious and uncluttered) */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {/* Riwayat Chat */}
-        <IconButton
-          icon={<MessageSquare className="w-4 h-4" />}
-          aria-label="Buka Riwayat Chat"
-          size="sm"
+      {/* Middle: Agent Status */}
+      <div className="flex items-center gap-1.5">
+        {getStatusBadge()}
+      </div>
+
+      {/* Right Controls */}
+      <div className="flex items-center gap-1 shrink-0">
+        {/* Toggle 50:50 Layout */}
+        <button
+          type="button"
+          onClick={onToggleSplitMode}
+          title={
+            splitMode === '50-50'
+              ? 'Tampilan Vertikal 50:50 (Aktif)'
+              : splitMode === 'player-focus'
+              ? 'Fokus Player Video'
+              : 'Fokus Chat Agent'
+          }
+          className="tap w-8 h-8 rounded-lg flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] border border-transparent hover:border-[#2f2f38] transition-colors"
+        >
+          <SplitSquareVertical className="w-4 h-4" />
+        </button>
+
+        {/* History / Sessions Button */}
+        <button
+          type="button"
           onClick={onOpenChatHistory}
-        />
+          title="Riwayat Percakapan AI"
+          className="tap flex items-center gap-1 px-2 h-8 rounded-lg text-[#b0b0bc] hover:text-white bg-[#1a1a20] hover:bg-[#25252e] border border-[#292933] text-xs font-medium transition-colors"
+        >
+          <MessageSquare className="w-3.5 h-3.5 text-[#e5484d]" />
+          <span className="font-mono text-[11px]">{sessionsCount}</span>
+        </button>
 
-        {/* Pengaturan Proyek & Agent */}
-        <IconButton
-          icon={<Sliders className="w-4 h-4" />}
-          aria-label="Pengaturan Proyek & Agent"
-          size="sm"
-          onClick={onOpenAgentSettings}
-        />
-
-        {/* Indikator status agent (titik hijau / kuning / merah) */}
-        <div className="flex items-center gap-1 pl-1 border-l border-[#27272c]">
-          <button
-            type="button"
-            onClick={agentStatus === 'disconnected' ? onReconnectAgent : undefined}
-            title={`${getStatusLabel()}${agentStatus === 'disconnected' ? ' (Ketuk untuk sambung ulang)' : ''}`}
-            className="tap flex items-center gap-1.5 p-1.5 rounded-full hover:bg-[#222226]"
-            aria-label={getStatusLabel()}
-          >
-            <span className={`w-2.5 h-2.5 rounded-full ${getStatusColor()}`} />
-            {agentStatus === 'disconnected' && (
-              <RefreshCw className="w-3 h-3 text-[#e5484d] animate-spin" />
-            )}
-          </button>
-        </div>
+        {/* New Chat Button */}
+        <button
+          type="button"
+          onClick={onNewChat}
+          title="Mulai Percakapan Baru"
+          className="tap w-8 h-8 rounded-lg flex items-center justify-center text-white bg-[#c92a2a] hover:bg-[#b02525] transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
     </header>
   );

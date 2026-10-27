@@ -1,49 +1,39 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   ArrowUp,
   Square,
   Paperclip,
-  RotateCcw,
-  Sparkles,
-  CheckCircle,
-  Circle,
   X,
   FileCode,
-  Layers,
+  Music,
+  Video,
+  Image as ImageIcon,
+  CheckCircle2,
   Clock,
-  FolderOpen,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
+  Sparkles,
 } from 'lucide-react';
-import { ChatMessage, ProjectAsset, TimelineClip, TimelineLayer, PermissionRequest, CodeDiff } from '../../types';
-import { ActivityLog } from './ActivityLog';
-import { PermissionCard } from './PermissionCard';
-import { DiffCard } from './DiffCard';
-import { PillButton } from '../ui/PillButton';
+import { AgentMessage, AgentAttachment, AgentToolCall } from '../../contracts/agentProtocol';
 
 interface ChatPanelProps {
-  messages: ChatMessage[];
+  messages: AgentMessage[];
   isAgentWorking: boolean;
-  onSendMessage: (text: string, context?: any, attachments?: ProjectAsset[]) => void;
+  onSendMessage: (text: string, attachments: AgentAttachment[]) => void;
   onStopAgent: () => void;
-  onRevertCheckpoint: (hash: string) => void;
-  onPermissionDecision: (messageId: string, decision: 'approved' | 'approved_session' | 'rejected') => void;
-  onDiffDecision: (messageId: string, accept: boolean) => void;
-  selectedLayer: TimelineLayer | null;
-  selectedClip: TimelineClip | null;
-  currentFrame: number;
-  fps: number;
-  activeFile: string;
-  assets: ProjectAsset[];
-  onOpenFileUpload: () => void;
+  currentSec: string;
+  selectedClipName?: string;
 }
 
-const QUICK_ACTIONS = [
-  'Tambah subtitle',
-  'Ganti musik',
-  'Zoom klip',
-  'Tambah transisi',
-  'Buat caption animasi',
+const QUICK_PROMPTS = [
+  '🔥 Bikin headline viral di detik 1',
+  '✨ Ubah animasi jadi zoom dinamis',
+  '🎬 Geser teks ke posisi atas (30%)',
+  '🎵 Sesuaikan beat musik latar',
+  '⏱️ Percepat durasi tayang klip',
 ];
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -51,442 +41,389 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isAgentWorking,
   onSendMessage,
   onStopAgent,
-  onRevertCheckpoint,
-  onPermissionDecision,
-  onDiffDecision,
-  selectedLayer,
-  selectedClip,
-  currentFrame,
-  fps,
-  activeFile,
-  assets,
-  onOpenFileUpload,
+  currentSec,
+  selectedClipName,
 }) => {
   const [inputText, setInputText] = useState('');
-  const [showMentionMenu, setShowMentionMenu] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [selectedAttachments, setSelectedAttachments] = useState<ProjectAsset[]>([]);
-  
-  // Context chips removable by user
-  const [includeLayerCtx, setIncludeLayerCtx] = useState(true);
-  const [includeTimeCtx, setIncludeTimeCtx] = useState(true);
-  const [includeFileCtx, setIncludeFileCtx] = useState(true);
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
+  const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto scroll to bottom
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAgentWorking]);
 
-  // Sync external text clear or programmatic reset
-  useEffect(() => {
-    if (inputRef.current && inputText === '' && inputRef.current.value !== '') {
-      inputRef.current.value = '';
-    }
-  }, [inputText]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInputText(val);
-
-    // Detect '@' for mentions
-    const lastAt = val.lastIndexOf('@');
-    if (lastAt !== -1 && lastAt === val.length - 1) {
-      setShowMentionMenu(true);
-      setMentionQuery('');
-    } else if (lastAt !== -1 && showMentionMenu) {
-      setMentionQuery(val.slice(lastAt + 1));
-    } else {
-      setShowMentionMenu(false);
+  // Adjust textarea height automatically
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   };
 
-  const handleSelectMention = (itemText: string) => {
-    const currentVal = inputRef.current ? inputRef.current.value : inputText;
-    const lastAt = currentVal.lastIndexOf('@');
-    const newText = (lastAt !== -1 ? currentVal.slice(0, lastAt) : currentVal) + `@${itemText} `;
-    if (inputRef.current) {
-      inputRef.current.value = newText;
-      inputRef.current.focus();
+  // Handle file attachment selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const type: AgentAttachment['type'] = file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('video/')
+        ? 'video'
+        : file.type.startsWith('audio/')
+        ? 'audio'
+        : 'document';
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const url = event.target?.result as string;
+        const newAttachment: AgentAttachment = {
+          id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          name: file.name,
+          type,
+          size: file.size,
+          url,
+          mimeType: file.type,
+          previewUrl: type === 'image' ? url : undefined,
+        };
+        setAttachments((prev) => [...prev, newAttachment]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-    setInputText(newText);
-    setShowMentionMenu(false);
   };
 
-  const handleSend = () => {
-    const textToSend = inputRef.current ? inputRef.current.value : inputText;
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isAgentWorking) {
       onStopAgent();
       return;
     }
+    if (!inputText.trim() && attachments.length === 0) return;
 
-    if (!textToSend.trim() && selectedAttachments.length === 0) return;
-
-    // Structured context from UI
-    const playheadSec = Number((currentFrame / fps).toFixed(2));
-    const contextData: any = {};
-    if (includeLayerCtx && selectedLayer) {
-      contextData.selectedLayer = selectedLayer.name;
-      if (selectedClip) contextData.selectedClipId = selectedClip.name;
-    }
-    if (includeTimeCtx) {
-      contextData.playheadFrame = currentFrame;
-      contextData.playheadSec = playheadSec;
-    }
-    if (includeFileCtx && activeFile) {
-      contextData.activeFile = activeFile;
-    }
-    contextData.assetsCount = assets.length;
-
-    onSendMessage(textToSend, contextData, selectedAttachments);
-    
-    if (inputRef.current) {
-      inputRef.current.value = '';
-    }
+    onSendMessage(inputText, attachments);
     setInputText('');
-    setSelectedAttachments([]);
+    setAttachments([]);
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSubmit();
     }
   };
 
-  const filteredAssets = assets.filter((a) =>
-    a.name.toLowerCase().includes(mentionQuery.toLowerCase())
-  );
+  const toggleToolExpand = (toolId: string) => {
+    setExpandedTools((prev) => ({ ...prev, [toolId]: !prev[toolId] }));
+  };
 
   return (
-    <div className="flex flex-col h-full bg-[#0e0e10] overflow-hidden relative">
-      {/* Messages area - flex-1 scroll, bottom aligned */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
-        {/* Empty state with prompt suggestions */}
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 my-auto select-none">
-            <div className="w-12 h-12 rounded-full bg-[#18181b] border border-[#27272c] flex items-center justify-center text-[#e5484d] mb-3 shadow-md">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <h4 className="text-sm font-semibold text-[#f2f2f3]">Studio Hermes AI Agent</h4>
-            <p className="text-xs text-[#8b8b94] max-w-[270px] mt-1 mb-4 leading-relaxed">
-              Tulis instruksi dalam bahasa Indonesia untuk mengedit video secara otomatis, atau pilih aksi cepat:
-            </p>
-            <div className="flex flex-wrap justify-center gap-1.5 max-w-[320px]">
-              {QUICK_ACTIONS.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => onSendMessage(action)}
-                  className="tap text-[11px] px-3 py-1.5 rounded-full bg-[#18181b] hover:bg-[#222226] border border-[#27272c] hover:border-[#303036] text-[#8b8b94] hover:text-[#f2f2f3] active:scale-95 transition-all"
-                >
-                  {action}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => (
+    <div className="w-full h-full flex flex-col bg-[#0e0e12] select-text relative overflow-hidden">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,video/*,audio/*,.json,.ts,.tsx,.txt"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* Messages Scroll Area */}
+      <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3.5 min-h-0 text-sm">
+        {messages.map((msg) => {
+          const isUser = msg.role === 'user';
+
+          return (
             <div
               key={msg.id}
-              className={`flex flex-col ${
-                msg.role === 'user' ? 'items-end' : 'items-start'
-              }`}
+              className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}
             >
-              {/* Message Bubble */}
+              {/* Message Bubble Container */}
               <div
-                className={`text-xs leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-[#e5484d] text-white rounded-2xl rounded-br-xs px-3.5 py-2.5 max-w-[85%] shadow-sm'
-                    : 'bg-[#222226] text-[#f2f2f3] rounded-2xl rounded-bl-xs px-3.5 py-2.5 max-w-[90%] border border-[#303036] shadow-sm'
+                className={`rounded-2xl px-3.5 py-2.5 max-w-[92%] sm:max-w-[85%] text-left shadow-sm ${
+                  isUser
+                    ? 'bg-[#c92a2a] text-white rounded-br-xs'
+                    : 'bg-[#18181f] text-[#f0f0f3] border border-[#262630] rounded-bl-xs'
                 }`}
               >
-                {/* Attachments inside bubble */}
+                {/* User Attachments Preview if any */}
                 {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1.5">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {msg.attachments.map((att) => (
-                      <span
+                      <div
                         key={att.id}
-                        className="bg-black/30 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-black/30 border border-white/10 text-xs"
                       >
-                        <FolderOpen className="w-2.5 h-2.5" />
-                        {att.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Context chips if sent */}
-                {msg.context && Object.keys(msg.context).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1.5 text-[9px] opacity-80 font-mono">
-                    {msg.context.selectedLayer && (
-                      <span className="bg-black/20 px-1.5 py-0.5 rounded">
-                        Track: {msg.context.selectedLayer}
-                      </span>
-                    )}
-                    {msg.context.playheadSec !== undefined && (
-                      <span className="bg-black/20 px-1.5 py-0.5 rounded">
-                        {msg.context.playheadSec}s
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Text Content with Markdown */}
-                <div className="prose prose-invert prose-xs max-w-none break-words">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.text}
-                  </ReactMarkdown>
-                </div>
-
-                {/* 6.9 Agent Plan Checklist */}
-                {msg.plan && msg.plan.length > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-[#303036] space-y-1">
-                    <div className="text-[10px] font-semibold text-[#8b8b94] uppercase tracking-wider mb-1">
-                      Rencana Aksi:
-                    </div>
-                    {msg.plan.map((item) => (
-                      <div key={item.id} className="flex items-center gap-1.5 text-[11px]">
-                        {item.completed ? (
-                          <CheckCircle className="w-3.5 h-3.5 text-[#5fd3b0] shrink-0" />
+                        {att.type === 'image' && att.url ? (
+                          <img
+                            src={att.url}
+                            alt={att.name}
+                            className="w-10 h-10 object-cover rounded"
+                          />
                         ) : (
-                          <Circle className="w-3.5 h-3.5 text-[#8b8b94] shrink-0" />
+                          <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center">
+                            {att.type === 'audio' ? (
+                              <Music className="w-4 h-4 text-emerald-300" />
+                            ) : att.type === 'video' ? (
+                              <Video className="w-4 h-4 text-sky-300" />
+                            ) : (
+                              <FileCode className="w-4 h-4 text-amber-300" />
+                            )}
+                          </div>
                         )}
-                        <span className={item.completed ? 'line-through text-[#8b8b94]' : 'text-[#f2f2f3]'}>
-                          {item.title}
-                        </span>
+                        <div className="min-w-0 pr-1">
+                          <p className="font-medium text-[11px] truncate max-w-[120px]">
+                            {att.name}
+                          </p>
+                          <p className="text-[9px] opacity-70">
+                            {Math.round(att.size / 1024)} KB
+                          </p>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* 6.2 Tool Call Activity Log */}
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <ActivityLog logs={msg.toolCalls} />
+                {/* Assistant Brand Avatar Kicker */}
+                {!isUser && (
+                  <div className="flex items-center gap-1.5 mb-1.5 pb-1 border-b border-white/5 text-[11px] text-[#8e8e9c]">
+                    <div className="w-4 h-4 rounded overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
+                      <img
+                        src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
+                        alt="Cat Logo"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="font-semibold text-white">Agent Remotion</span>
+                    <span>·</span>
+                    <span className="font-mono text-[10px] text-[#717180]">ACP</span>
+                  </div>
                 )}
 
-                {/* 6.3 Action Permission Card */}
-                {msg.permission && (
-                  <PermissionCard
-                    permission={msg.permission}
-                    onDecision={(dec) => onPermissionDecision(msg.id, dec)}
-                  />
-                )}
-
-                {/* 6.7 Diff Code Review */}
-                {msg.diff && (
-                  <DiffCard
-                    diff={msg.diff}
-                    onAccept={() => onDiffDecision(msg.id, true)}
-                    onReject={() => onDiffDecision(msg.id, false)}
-                  />
-                )}
-              </div>
-
-              {/* 6.4 Auto-checkpoint revert chip */}
-              {msg.canRevert && msg.checkpointHash && (
-                <div className="mt-1">
-                  <button
-                    type="button"
-                    onClick={() => onRevertCheckpoint(msg.checkpointHash!)}
-                    className="tap inline-flex items-center gap-1 text-[10px] text-[#8b8b94] hover:text-[#f2f2f3] bg-[#18181b] border border-[#27272c] px-2 py-1 rounded-full transition-colors"
-                  >
-                    <RotateCcw className="w-2.5 h-2.5 text-[#e5484d]" />
-                    <span>Kembalikan sebelum perubahan ini</span>
-                  </button>
+                {/* Markdown text */}
+                <div className="prose prose-invert prose-xs max-w-none break-words leading-relaxed">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
                 </div>
-              )}
-            </div>
-          ))
-        )}
 
-        {/* Typing / Agent working indicator */}
+                {/* ACP Tool Execution Logs inside Assistant Message */}
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1.5">
+                    {msg.toolCalls.map((tool) => {
+                      const isExpanded = !!expandedTools[tool.id];
+                      return (
+                        <div
+                          key={tool.id}
+                          className="bg-[#111116] border border-[#2a2a35] rounded-xl overflow-hidden text-xs"
+                        >
+                          {/* Tool Header Summary */}
+                          <button
+                            type="button"
+                            onClick={() => toggleToolExpand(tool.id)}
+                            className="w-full px-2.5 py-1.5 flex items-center justify-between text-left hover:bg-[#16161d] transition-colors gap-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Terminal className="w-3.5 h-3.5 text-[#e5484d] shrink-0" />
+                              <span className="font-mono text-[11px] text-[#e0e0ea] font-medium truncate">
+                                {tool.toolName}
+                              </span>
+                              {tool.durationMs && (
+                                <span className="text-[10px] text-[#696978] font-mono shrink-0">
+                                  {tool.durationMs}ms
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {tool.status === 'completed' && (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              )}
+                              {tool.status === 'running' && (
+                                <span className="w-3 h-3 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+                              )}
+                              {isExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-[#737382]" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-[#737382]" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Tool Expanded Details */}
+                          {isExpanded && (
+                            <div className="px-2.5 pb-2 pt-1 border-t border-[#202028] bg-[#0b0b0e] space-y-1 text-[11px] font-mono">
+                              {tool.description && (
+                                <p className="text-[#a0a0af]">{tool.description}</p>
+                              )}
+                              {tool.arguments && (
+                                <div className="text-[#7c7c8d] bg-black/40 p-1.5 rounded border border-white/5 overflow-x-auto">
+                                  <span className="text-cyan-400">args:</span>{' '}
+                                  {JSON.stringify(tool.arguments)}
+                                </div>
+                              )}
+                              {tool.result && (
+                                <div className="text-emerald-400/90 bg-emerald-950/20 p-1.5 rounded border border-emerald-900/30">
+                                  {tool.result}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Message Timestamp */}
+                <div
+                  className={`text-[9px] font-mono mt-1 ${
+                    isUser ? 'text-red-200/80 text-right' : 'text-[#6c6c7b]'
+                  }`}
+                >
+                  {msg.timestamp}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Live Thinking Status Box */}
         {isAgentWorking && (
-          <div className="flex items-center gap-2 text-xs text-[#8b8b94] bg-[#18181b] border border-[#27272c] rounded-full px-3 py-1.5 w-fit animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-[#e5484d] animate-ping" />
-            <span>AI Agent sedang mengedit project...</span>
+          <div className="flex items-center gap-2.5 bg-[#171720] border border-[#2b2b38] px-3 py-2 rounded-2xl max-w-[85%] text-xs text-[#a0a0b0]">
+            <span className="w-4 h-4 rounded-full border-2 border-[#e5484d] border-t-transparent animate-spin shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-white truncate">Agent sedang memproses...</p>
+              <p className="text-[10px] text-[#787889] font-mono truncate">
+                Protokol ACP • Memperbarui Remotion Composition
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onStopAgent}
+              className="tap px-2 py-1 bg-red-950 hover:bg-red-900 border border-red-700/60 rounded text-[10px] text-red-200 font-bold"
+            >
+              Stop
+            </button>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Bottom Area: Controls, Chips, and Input (Anchored together cleanly) */}
-      <div className="relative px-3 py-2 bg-[#0e0e10] border-t border-[#27272c]/50 shrink-0 space-y-1.5">
-        {/* Mention Popup Menu - Anchored strictly directly above the input box */}
-        {showMentionMenu && (
-          <div className="absolute bottom-full mb-2 left-3 right-3 bg-[#18181b] border border-[#303036] rounded-2xl p-2 shadow-2xl z-40 max-h-48 overflow-y-auto">
-            <div className="text-[10px] font-semibold text-[#8b8b94] uppercase px-2 py-1 text-[#8b8b94]">
-              Sebut Asset atau File (@)
-            </div>
-            {filteredAssets.length === 0 ? (
-              <div className="text-xs text-[#8b8b94] px-2 py-1.5">Tidak ada asset cocok</div>
-            ) : (
-              filteredAssets.map((asset) => (
-                <button
-                  key={asset.id}
-                  type="button"
-                  onClick={() => handleSelectMention(asset.name)}
-                  className="tap w-full flex items-center justify-between p-2 rounded-xl hover:bg-[#222226] text-left text-xs transition-colors"
-                >
-                  <span className="text-[#f2f2f3] font-medium">{asset.name}</span>
-                  <span className="text-[10px] text-[#8b8b94] uppercase">{asset.type}</span>
-                </button>
-              ))
-            )}
-            <button
-              type="button"
-              onClick={() => handleSelectMention(activeFile)}
-              className="tap w-full flex items-center justify-between p-2 rounded-xl hover:bg-[#222226] text-left text-xs transition-colors border-t border-[#27272c] mt-1"
-            >
-              <span className="text-[#7aa7ff] font-medium font-code">{activeFile}</span>
-              <span className="text-[10px] text-[#8b8b94]">File Aktif</span>
-            </button>
-          </div>
-        )}
+      {/* Quick Prompts Bar */}
+      <div className="px-3 py-1.5 bg-[#0b0b0e] border-t border-[#1d1d24] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+        {QUICK_PROMPTS.map((prompt, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => onSendMessage(prompt, [])}
+            disabled={isAgentWorking}
+            className="tap whitespace-nowrap text-[11px] px-2.5 py-1 rounded-full bg-[#181820] hover:bg-[#23232c] text-[#a7a7b5] hover:text-white border border-[#24242e] transition-colors shrink-0 disabled:opacity-50"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
 
-        {/* 6.10 Quick Action Chips (Shown as sleek scrollable pills when messages exist) */}
-        {messages.length > 0 && (
-          <div className="overflow-x-auto flex items-center gap-1.5 no-scrollbar py-0.5">
-            <span className="text-[10px] font-semibold text-[#76767f] uppercase shrink-0">Aksi:</span>
-            {QUICK_ACTIONS.map((action) => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => onSendMessage(action)}
-                className="tap whitespace-nowrap text-[10px] px-2.5 py-0.5 rounded-full bg-[#18181b] hover:bg-[#222226] border border-[#27272c] text-[#8b8b94] hover:text-[#f2f2f3] active:scale-95 transition-all shrink-0"
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* 6.5 Context Chips & Attachment Chips Bar (Compact inline row) */}
-        {((includeLayerCtx && selectedLayer) || includeTimeCtx || (includeFileCtx && activeFile) || selectedAttachments.length > 0) && (
-          <div className="overflow-x-auto flex items-center gap-1.5 text-[10px] no-scrollbar py-0.5">
-            {includeLayerCtx && selectedLayer && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#222226] text-[#b39dff] border border-[#303036] shrink-0">
-                <Layers className="w-2.5 h-2.5" />
-                <span className="truncate max-w-[80px]">{selectedLayer.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setIncludeLayerCtx(false)}
-                  className="text-[#8b8b94] hover:text-white ml-0.5"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            )}
-
-            {includeTimeCtx && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#222226] text-[#7aa7ff] border border-[#303036] shrink-0">
-                <Clock className="w-2.5 h-2.5" />
-                <span>{Number((currentFrame / fps).toFixed(1))}s</span>
-                <button
-                  type="button"
-                  onClick={() => setIncludeTimeCtx(false)}
-                  className="text-[#8b8b94] hover:text-white ml-0.5"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            )}
-
-            {includeFileCtx && activeFile && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#222226] text-[#5fd3b0] border border-[#303036] shrink-0">
-                <FileCode className="w-2.5 h-2.5" />
-                <span className="truncate max-w-[80px]">{activeFile}</span>
-                <button
-                  type="button"
-                  onClick={() => setIncludeFileCtx(false)}
-                  className="text-[#8b8b94] hover:text-white ml-0.5"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            )}
-
-            {/* Selected file attachments */}
-            {selectedAttachments.map((att) => (
-              <span
+      {/* Sticky Bottom Input Area */}
+      <div className="p-2.5 bg-[#111116] border-t border-[#23232b] shrink-0 z-10">
+        {/* Attachment Previews */}
+        {attachments.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 overflow-x-auto no-scrollbar py-1">
+            {attachments.map((att) => (
+              <div
                 key={att.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#3b2427] text-[#e5484d] border border-[#e5484d]/40 shrink-0"
+                className="flex items-center gap-1.5 px-2 py-1 bg-[#1a1a22] border border-[#2e2e3a] rounded-lg text-xs shrink-0 text-white"
               >
-                <FolderOpen className="w-2.5 h-2.5" />
-                <span className="truncate max-w-[80px]">{att.name}</span>
+                {att.type === 'image' && att.url ? (
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="w-5 h-5 object-cover rounded"
+                  />
+                ) : (
+                  <Paperclip className="w-3.5 h-3.5 text-[#e5484d]" />
+                )}
+                <span className="max-w-[110px] truncate text-[11px]">{att.name}</span>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSelectedAttachments((prev) => prev.filter((a) => a.id !== att.id))
-                  }
-                  className="text-[#e5484d] hover:text-white ml-0.5"
+                  onClick={() => removeAttachment(att.id)}
+                  className="tap w-4 h-4 rounded-full flex items-center justify-center text-[#8e8e9c] hover:text-red-400"
                 >
-                  <X className="w-2.5 h-2.5" />
+                  <X className="w-3 h-3" />
                 </button>
-              </span>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Input Capsule */}
-        <div className="flex items-center bg-[#222226] border border-[#303036] rounded-full px-2 py-1 focus-within:border-[#e5484d]/60 transition-colors">
-          {/* Tombol Paperclip */}
+        {/* Input Form */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-end gap-2 bg-[#17171e] border border-[#2b2b36] rounded-2xl p-1.5 focus-within:border-[#e5484d] transition-colors"
+        >
+          {/* File Attachment Button */}
           <button
             type="button"
-            aria-label="Lampirkan file asset"
-            onClick={onOpenFileUpload}
-            className="tap w-9 h-9 flex items-center justify-center text-[#8b8b94] hover:text-[#f2f2f3] active:scale-95 transition-transform shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            title="Lampirkan Gambar/Video/Audio/Kode"
+            className="tap w-9 h-9 rounded-xl flex items-center justify-center text-[#8e8e9c] hover:text-white hover:bg-[#242430] transition-colors shrink-0"
           >
             <Paperclip className="w-4 h-4" />
           </button>
 
-          {/* Input transparan dengan konfigurasi native LTR (uncontrolled DOM untuk mencegah reset caret) */}
-          <input
-            ref={inputRef}
-            type="text"
+          {/* Text Input (Strict LTR, Natural Entry) */}
+          <textarea
+            ref={textareaRef}
+            rows={1}
             dir="ltr"
-            lang="id"
-            defaultValue=""
-            onChange={handleInputChange}
+            value={inputText}
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder="Minta AI edit videonya..."
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className="flex-1 bg-transparent px-2 text-xs sm:text-sm text-[#f2f2f3] placeholder-[#76767f] focus:outline-hidden text-left [direction:ltr] select-text"
-            style={{
-              direction: 'ltr',
-              textAlign: 'left',
-              unicodeBidi: 'plaintext',
-              userSelect: 'text',
-              WebkitUserSelect: 'text',
-            }}
+            placeholder="Ketik instruksi edit video (misal: 'geser teks ke atas', 'tambah headline')..."
+            className="flex-1 bg-transparent text-white text-xs placeholder-[#666675] resize-none outline-none py-2 px-1 max-h-[120px] font-sans text-left"
+            style={{ direction: 'ltr', textAlign: 'left', unicodeBidi: 'normal' }}
           />
 
-          {/* Tombol kirim bulat merah berikon ArrowUp (atau Stop persegi saat agent bekerja) */}
-          <button
-            type="button"
-            aria-label={isAgentWorking ? 'Hentikan agent' : 'Kirim instruksi ke agent'}
-            onClick={handleSend}
-            disabled={!isAgentWorking && !inputText.trim() && selectedAttachments.length === 0}
-            className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
-              isAgentWorking
-                ? 'bg-[#e5484d] hover:bg-[#d93d42] text-white animate-pulse'
-                : inputText.trim() || selectedAttachments.length > 0
-                ? 'bg-[#e5484d] hover:bg-[#d93d42] text-white active:scale-95 shadow-sm'
-                : 'bg-[#303036] text-[#76767f] opacity-50 cursor-not-allowed'
-            }`}
-          >
-            {isAgentWorking ? (
-              <Square className="w-3.5 h-3.5 fill-white" />
-            ) : (
-              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-            )}
-          </button>
-        </div>
+          {/* Send or Stop Button */}
+          {isAgentWorking ? (
+            <button
+              type="button"
+              onClick={onStopAgent}
+              title="Batalkan proses"
+              className="tap w-9 h-9 rounded-xl bg-red-950 text-red-400 border border-red-700/60 flex items-center justify-center hover:bg-red-900 transition-colors shrink-0"
+            >
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!inputText.trim() && attachments.length === 0}
+              title="Kirim pesan ke Agent"
+              className="tap w-9 h-9 rounded-xl bg-[#c92a2a] hover:bg-[#b02525] disabled:opacity-40 disabled:hover:bg-[#c92a2a] text-white flex items-center justify-center transition-all shrink-0 shadow-sm"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+          )}
+        </form>
       </div>
     </div>
   );
