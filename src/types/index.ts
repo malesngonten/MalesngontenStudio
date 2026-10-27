@@ -145,3 +145,39 @@ export interface AgentSettings {
   autoFixErrors: boolean;
   maxAutoFixAttempts: number;
 }
+
+export interface DiscoveredAgent {
+  id: string;
+  name: string;
+  command: string;
+  protocol: 'acp' | 'cli' | 'mock' | 'http';
+  version?: string;
+  status: 'ready' | 'installed' | 'not_found' | 'misconfigured';
+  description: string;
+  supportedTools: string[];
+  latencyMs?: number;
+  isSelected?: boolean;
+}
+
+export interface SystemDiagnostics {
+  platform: string;
+  arch: string;
+  nodeVersion: string;
+  isAndroidOrProot: boolean;
+  memory: {
+    totalMb: number;
+    freeMb: number;
+    usedMb: number;
+    percentUsed: number;
+  };
+  tools: {
+    node: { available: boolean; version?: string };
+    npm: { available: boolean; version?: string };
+    git: { available: boolean; version?: string };
+    ffmpeg: { available: boolean; version?: string };
+    chromium: { available: boolean; path?: string; version?: string };
+  };
+  readinessScore: 'ready' | 'warning' | 'incompatible';
+  warnings: string[];
+  recommendations: string[];
+}

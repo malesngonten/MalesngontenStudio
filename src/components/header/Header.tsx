@@ -18,6 +18,7 @@ interface HeaderProps {
   onToggleSplitMode: () => void;
   onOpenChatHistory: () => void;
   onOpenSettings: () => void;
+  onOpenAgentDiscovery?: () => void;
   onNewChat: () => void;
 }
 
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSplitMode,
   onOpenChatHistory,
   onOpenSettings,
+  onOpenAgentDiscovery,
   onNewChat,
 }) => {
   const getStatusBadge = () => {
@@ -98,10 +100,15 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Middle: Agent Status */}
-      <div className="flex items-center gap-1.5">
+      {/* Middle: Agent Status Button */}
+      <button
+        type="button"
+        onClick={onOpenAgentDiscovery}
+        title="Buka Status Agent & Diagnostik Sistem"
+        className="tap hover:opacity-90 transition-opacity"
+      >
         {getStatusBadge()}
-      </div>
+      </button>
 
       {/* Right Controls */}
       <div className="flex items-center gap-1 shrink-0">

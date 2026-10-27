@@ -3,7 +3,7 @@
  * Designed for modular integration with local coding agents (Claude, Gemini, Ollama, ACP Daemons)
  */
 
-import { TimelineData, TimelineClip } from '../types';
+import { TimelineData, TimelineClip, DiscoveredAgent } from '../types';
 
 export type AgentStatus = 'idle' | 'connecting' | 'thinking' | 'executing_tool' | 'streaming' | 'error';
 
@@ -89,4 +89,10 @@ export interface IAgentClient {
 
   /** Delete a conversation session */
   deleteSession(sessionId: string): Promise<void>;
+
+  /** Discover available AI agents on host system */
+  discoverAgents?(): Promise<DiscoveredAgent[]>;
+
+  /** Switch active agent */
+  selectAgent?(agentId: string): Promise<boolean>;
 }

@@ -1,6 +1,7 @@
 /**
  * Studio State Management Hook
  * Decouples the UI layer from communication protocols & mock adapters.
+ * Connects directly to HttpAgentAdapter (ACP via SSE) and WorkspaceService.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -9,6 +10,8 @@ import {
   TimelineClip,
   TimelineLayer,
   ProjectAsset,
+  RenderJob,
+  DiscoveredAgent,
 } from '../types';
 import {
   AgentMessage,
@@ -17,7 +20,8 @@ import {
   AgentAttachment,
   AgentToolCall,
 } from '../contracts/agentProtocol';
-import { agentClientInstance } from '../services/MockAgentAdapter';
+import { studioAgentClient } from '../services/HttpAgentAdapter';
+import { studioWorkspace } from '../services/WorkspaceService';
 
 export const INITIAL_STUDIO_TIMELINE: TimelineData = {
   fps: 30,
@@ -170,32 +174,111 @@ export function useStudioState() {
   const [activeToolCalls, setActiveToolCalls] = useState<AgentToolCall[]>([]);
   const [assets, setAssets] = useState<ProjectAsset[]>(DEFAULT_ASSETS);
 
-  // Sync timeline changes to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('males_ngonten_timeline', JSON.stringify(timeline));
-    } catch (e) {
-      // ignore
-    }
-  }, [timeline]);
+  // Render Engine State
+  const [currentRenderJob, setCurrentRenderJob] = useState<RenderJob | null>(null);
+  const [completedRenderJobs, setCompletedRenderJobs] = useState<RenderJob[]>([]);
 
-  // Load initial sessions & connect agent
+  // Sync timeline changes to backend and localStorage
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const syncTimelineToWorkspace = useCallback((newTimeline: TimelineData) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      studioWorkspace.saveTimeline(newTimeline);
+    }, 400);
+  }, []);
+
+  // Realtime SSE listener for backend file modifications & renders
+  useEffect(() => {
+    studioAgentClient.onFileChanged((file, newTimeline) => {
+      if (file === 'timeline.json' && newTimeline) {
+        setTimeline(newTimeline);
+      }
+    });
+
+    // Listen for render SSE events directly
+    if (typeof window !== 'undefined') {
+      const es = new EventSource('/api/events');
+      es.addEventListener('render_progress', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.job) {
+            setCurrentRenderJob(data.job);
+          }
+        } catch {}
+      });
+
+      es.addEventListener('render_completed', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.job) {
+            setCurrentRenderJob(null);
+            setCompletedRenderJobs((prev) => [
+              data.job,
+              ...prev.filter((j) => j.id !== data.job.id),
+            ]);
+          }
+        } catch {}
+      });
+
+      es.addEventListener('render_cancelled', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.jobId) {
+            setCurrentRenderJob(null);
+          }
+        } catch {}
+      });
+
+      return () => {
+        es.close();
+      };
+    }
+  }, []);
+
+  // Load initial workspace state, timeline, assets, & sessions
   useEffect(() => {
     let mounted = true;
-    agentClientInstance.connect().then(() => {
+
+    // Load timeline from workspace
+    studioWorkspace.getTimeline().then((tl) => {
+      if (mounted && tl && tl.layers) {
+        setTimeline(tl);
+      }
+    });
+
+    // Load assets
+    studioWorkspace.getAssets().then((ast) => {
+      if (mounted && ast && ast.length > 0) {
+        setAssets(ast);
+      }
+    });
+
+    // Load existing renders
+    fetch('/api/renders')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (mounted && data?.renders) {
+          setCompletedRenderJobs(data.renders.filter((j: any) => j.status === 'completed'));
+        }
+      })
+      .catch(() => {});
+
+    // Connect agent
+    studioAgentClient.connect().then(() => {
       if (!mounted) return;
-      agentClientInstance.getSessions().then((sList) => {
+      studioAgentClient.getSessions().then((sList) => {
         if (!mounted) return;
         setSessions(sList);
         if (sList.length > 0) {
           const firstId = sList[0].id;
           setActiveSessionId(firstId);
-          agentClientInstance.switchSession(firstId).then((msgs) => {
+          studioAgentClient.switchSession(firstId).then((msgs) => {
             if (mounted) setMessages(msgs);
           });
         }
       });
     });
+
     return () => {
       mounted = false;
     };
@@ -237,10 +320,12 @@ export function useStudioState() {
             }),
           };
         });
-        return { ...prev, layers: nextLayers };
+        const next = { ...prev, layers: nextLayers };
+        syncTimelineToWorkspace(next);
+        return next;
       });
     },
-    []
+    [syncTimelineToWorkspace]
   );
 
   // Handle timeline clip timing update (from, duration)
@@ -263,10 +348,12 @@ export function useStudioState() {
             }),
           };
         });
-        return { ...prev, layers: nextLayers };
+        const next = { ...prev, layers: nextLayers };
+        syncTimelineToWorkspace(next);
+        return next;
       });
     },
-    []
+    [syncTimelineToWorkspace]
   );
 
   // Select clip handler
@@ -297,7 +384,7 @@ export function useStudioState() {
       setMessages((prev) => [...prev, tempUserMsg]);
 
       try {
-        const assistantMsg = await agentClientInstance.sendMessage(
+        const assistantMsg = await studioAgentClient.sendMessage(
           text,
           attachments,
           {
@@ -319,9 +406,14 @@ export function useStudioState() {
         setMessages((prev) => [...prev, assistantMsg]);
         setAgentStatus('idle');
 
-        // Apply changes to timeline if the agent triggered timeline tools
+        // Apply changes to timeline if the agent modified keywords
         const lower = text.toLowerCase();
-        if (lower.includes('headline') || lower.includes('teks') || lower.includes('subtitle') || lower.includes('tulisan')) {
+        if (
+          lower.includes('headline') ||
+          lower.includes('teks') ||
+          lower.includes('subtitle') ||
+          lower.includes('tulisan')
+        ) {
           setTimeline((prev) => {
             const next = { ...prev };
             const textLayer = next.layers.find((l) => l.type === 'text');
@@ -329,10 +421,15 @@ export function useStudioState() {
               const c = textLayer.clips[0];
               c.props = {
                 ...c.props,
-                animation: lower.includes('zoom') ? 'zoom' : lower.includes('bounce') ? 'bounce' : 'slide-up',
+                animation: lower.includes('zoom')
+                  ? 'zoom'
+                  : lower.includes('bounce')
+                  ? 'bounce'
+                  : 'slide-up',
                 y: lower.includes('atas') ? 30 : lower.includes('bawah') ? 68 : 42,
               };
             }
+            syncTimelineToWorkspace(next);
             return { ...next };
           });
         }
@@ -340,40 +437,80 @@ export function useStudioState() {
         setAgentStatus('idle');
       }
     },
-    [currentFrame, timeline, selectedClip, selectedClipId]
+    [currentFrame, timeline, selectedClip, selectedClipId, syncTimelineToWorkspace]
   );
 
   // Stop agent execution
   const handleStopAgent = useCallback(() => {
-    agentClientInstance.abort();
+    studioAgentClient.abort();
     setAgentStatus('idle');
   }, []);
 
   // Switch chat session
   const handleSwitchSession = useCallback(async (sessionId: string) => {
     setActiveSessionId(sessionId);
-    const msgs = await agentClientInstance.switchSession(sessionId);
+    const msgs = await studioAgentClient.switchSession(sessionId);
     setMessages(msgs);
   }, []);
 
   // Create new chat session
   const handleNewChat = useCallback(async () => {
-    const newSession = await agentClientInstance.createSession();
-    setSessions(await agentClientInstance.getSessions());
+    const newSession = await studioAgentClient.createSession();
+    setSessions(await studioAgentClient.getSessions());
     setActiveSessionId(newSession.id);
-    const msgs = await agentClientInstance.switchSession(newSession.id);
+    const msgs = await studioAgentClient.switchSession(newSession.id);
     setMessages(msgs);
   }, []);
 
   // Delete chat session
   const handleDeleteSession = useCallback(async (sessionId: string) => {
-    await agentClientInstance.deleteSession(sessionId);
-    const updated = await agentClientInstance.getSessions();
+    await studioAgentClient.deleteSession(sessionId);
+    const updated = await studioAgentClient.getSessions();
     setSessions(updated);
     if (updated.length > 0) {
       setActiveSessionId(updated[0].id);
-      const msgs = await agentClientInstance.switchSession(updated[0].id);
+      const msgs = await studioAgentClient.switchSession(updated[0].id);
       setMessages(msgs);
+    }
+  }, []);
+
+  // Render Management
+  const handleStartRender = useCallback(
+    async (resolution: '720p' | '1080p' | '4K', fps: number) => {
+      try {
+        const res = await fetch('/api/render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolution, fps }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.job) {
+            setCurrentRenderJob(data.job);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to trigger render', e);
+      }
+    },
+    []
+  );
+
+  const handleCancelRender = useCallback(async (jobId: string) => {
+    try {
+      await fetch(`/api/render/${jobId}/cancel`, { method: 'POST' });
+      setCurrentRenderJob(null);
+    } catch (e) {
+      console.error('Failed to cancel render', e);
+    }
+  }, []);
+
+  const handleDeleteRender = useCallback(async (jobId: string) => {
+    try {
+      await fetch(`/api/renders/${jobId}`, { method: 'DELETE' });
+      setCompletedRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
+    } catch (e) {
+      console.error('Failed to delete render', e);
     }
   }, []);
 
@@ -397,6 +534,11 @@ export function useStudioState() {
     activeToolCalls,
     assets,
     setAssets,
+    currentRenderJob,
+    completedRenderJobs,
+    handleStartRender,
+    handleCancelRender,
+    handleDeleteRender,
     handleUpdateClipPosition,
     handleUpdateClipTiming,
     handleSelectClip,

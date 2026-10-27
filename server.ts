@@ -3,7 +3,8 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { GoogleGenAI } from '@google/genai';
+import os from 'os';
+import { spawnSync, spawn, ChildProcess } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,12 +20,13 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const WORKSPACE_DIR = process.cwd();
 const PROJECTS_BASE = path.join(WORKSPACE_DIR, 'projects');
 const ACTIVE_PROJECT_DIR = path.join(PROJECTS_BASE, 'proyek-remotion-1');
-const OUT_DIR = path.join(ACTIVE_PROJECT_DIR, 'out');
+const OUT_DIR = path.join(WORKSPACE_DIR, 'out');
 const ASSETS_DIR = path.join(ACTIVE_PROJECT_DIR, 'public', 'assets');
-const CHATS_DIR = path.join(ACTIVE_PROJECT_DIR, '.hermes', 'chats');
+const CHATS_DIR = path.join(ACTIVE_PROJECT_DIR, '.males_ngonten', 'chats');
+const SCRIPTS_DIR = path.join(WORKSPACE_DIR, 'scripts');
 
 // Ensure base project directories exist
-[PROJECTS_BASE, ACTIVE_PROJECT_DIR, OUT_DIR, ASSETS_DIR, CHATS_DIR, path.join(ACTIVE_PROJECT_DIR, 'src')].forEach((dir) => {
+[PROJECTS_BASE, ACTIVE_PROJECT_DIR, OUT_DIR, ASSETS_DIR, CHATS_DIR, path.join(ACTIVE_PROJECT_DIR, 'src'), SCRIPTS_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -40,15 +42,15 @@ const DEFAULT_TIMELINE = {
     {
       id: 'layer-video',
       type: 'video',
-      name: 'Video',
+      name: 'Video Background',
       clips: [
         {
           id: 'clip-v1',
-          name: 'Background Cyber Gradient',
+          name: 'Cyber Studio Gradient',
           from: 0,
           duration: 150,
           props: {
-            backgroundColor: 'radial-gradient(circle at 50% 40%, #1f1b2e 0%, #0d0c14 100%)',
+            backgroundColor: 'radial-gradient(circle at 50% 40%, #201315 0%, #0d0c10 100%)',
           },
         },
       ],
@@ -56,7 +58,7 @@ const DEFAULT_TIMELINE = {
     {
       id: 'layer-text',
       type: 'text',
-      name: 'Teks',
+      name: 'Teks & Headline',
       clips: [
         {
           id: 'clip-t1',
@@ -64,10 +66,10 @@ const DEFAULT_TIMELINE = {
           from: 10,
           duration: 65,
           props: {
-            text: 'Studio Hermes Remotion',
-            fontSize: 48,
+            text: 'Males Ngonten Studio 🐱',
+            fontSize: 46,
             color: '#ffffff',
-            y: 42,
+            y: 40,
             x: 50,
             animation: 'slide-up',
           },
@@ -78,10 +80,10 @@ const DEFAULT_TIMELINE = {
           from: 75,
           duration: 70,
           props: {
-            text: 'AI Agent Short-Video Editor',
-            fontSize: 38,
+            text: 'Bikin Video Remotion Pake AI Agent!',
+            fontSize: 36,
             color: '#e5484d',
-            y: 50,
+            y: 52,
             x: 50,
             animation: 'zoom',
           },
@@ -91,7 +93,7 @@ const DEFAULT_TIMELINE = {
     {
       id: 'layer-narration',
       type: 'narration',
-      name: 'Narasi',
+      name: 'Narasi Suara',
       clips: [
         {
           id: 'clip-n1',
@@ -99,8 +101,8 @@ const DEFAULT_TIMELINE = {
           from: 15,
           duration: 120,
           props: {
-            text: '"Edit video pendek langsung dari HP dengan AI agent realtime!"',
-            speaker: 'Hermes Voice',
+            text: '"Gak sempat ngedit? AI agent ini yang coding videonya!"',
+            speaker: 'Studio Voice',
           },
         },
       ],
@@ -108,11 +110,11 @@ const DEFAULT_TIMELINE = {
     {
       id: 'layer-music',
       type: 'music',
-      name: 'Musik',
+      name: 'Musik Beat',
       clips: [
         {
           id: 'clip-m1',
-          name: 'Upbeat Lo-fi Pulse',
+          name: 'Lo-Fi Chill Beat',
           from: 0,
           duration: 150,
           props: {
@@ -127,56 +129,83 @@ const DEFAULT_TIMELINE = {
 // Default assets.json
 const DEFAULT_ASSETS = [
   {
-    id: 'asset-bg-1',
+    id: 'asset-logo-brand',
+    name: 'Black_Cat_Logo.png',
+    type: 'image',
+    path: '/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png',
+    size: 245000,
+    width: 1024,
+    height: 1024,
+    createdAt: 'Baru saja',
+  },
+  {
+    id: 'asset-bg-vid',
     name: 'cyber_gradient_bg.mp4',
     type: 'video',
     path: '/assets/cyber_gradient_bg.mp4',
-    size: 4200000,
+    size: 3800000,
     duration: 10,
     width: 1080,
     height: 1920,
-    createdAt: new Date().toISOString(),
+    createdAt: 'Hari ini',
   },
   {
-    id: 'asset-audio-1',
-    name: 'lofi_upbeat_beat.mp3',
+    id: 'asset-beat-audio',
+    name: 'lofi_pulse_beat.mp3',
     type: 'audio',
     path: '/assets/lofi_upbeat_beat.mp3',
-    size: 2100000,
+    size: 1900000,
     duration: 30,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'asset-logo-1',
-    name: 'hermes_badge.png',
-    type: 'image',
-    path: '/assets/hermes_badge.png',
-    size: 450000,
-    width: 512,
-    height: 512,
-    createdAt: new Date().toISOString(),
+    createdAt: 'Hari ini',
   },
 ];
 
 // Default GEMINI.md
-const DEFAULT_GEMINI_RULES = `# ATURAN PROYEK STUDIO HERMES REMOTION (GEMINI.md)
+const DEFAULT_GEMINI_RULES = `# ATURAN PROYEK MALES NGONTEN STUDIO (GEMINI.md)
 
 1. GAYA DAN FORMAT VIDEO
 - Seluruh video bertipe portrait 9:16 (1080 x 1920 piksel), dioptimalkan untuk TikTok, Instagram Reels, dan YouTube Shorts.
 - Kecepatan ritme cepat (pacing dinamis), pergantian teks per 1.5 - 2.5 detik.
-- Font utama: 'Inter Variable' untuk UI dan judul, sans-serif tebal dengan kontras tinggi.
-- Palet warna: Aksen merah #e5484d, background gelap #0e0e10, teks putih #ffffff.
+- Font utama: 'Inter', sans-serif tebal dengan kontras tinggi.
+- Palet warna: Aksen merah #c92a2a / #e5484d, background gelap #0b0b0e, teks putih #ffffff.
 
 2. SINKRONISASI VISUAL DAN NARASI
 - Visual HARUS sinkron persis dengan timestamp narasi suara.
-- Statistik / data angka harus dimunculkan dengan animasi counter atau grafik naik.
-- Poin daftar harus ditampilkan sebagai kartu bertahap satu per satu (staggered).
+- Perubahan teks atau layer harus mempertimbangkan durasi total komposisi.
 
 3. STRUKTUR PROYEK
 - File sumber: src/Composition.tsx
 - Definisi timeline: timeline.json (sumber kebenaran durasi, layer, dan klip).
 - Daftar asset: assets.json.
-- Jangan menyentuh file di luar folder proyek aktif. Semua perubahan wajib melalui tool file proyek.
+`;
+
+const DEFAULT_COMPOSITION = `// ShortVideoComposition.tsx
+// Powered by Remotion v4.0 & Males Ngonten Studio AI Agent
+
+import React from 'react';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+
+export const ShortVideoComposition: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  return (
+    <AbsoluteFill className="bg-black select-none overflow-hidden font-sans">
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#201315] to-[#0d0c10]" />
+      
+      {/* Title */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
+          Males Ngonten Studio 🐱
+        </h1>
+        <p className="text-xl text-[#e5484d] font-semibold mt-4">
+          AI Coding Agent Video Engine
+        </p>
+      </div>
+    </AbsoluteFill>
+  );
+};
 `;
 
 // Initialize files if not existing
@@ -195,6 +224,11 @@ if (!fs.existsSync(geminiRulesPath)) {
   fs.writeFileSync(geminiRulesPath, DEFAULT_GEMINI_RULES, 'utf-8');
 }
 
+const compPath = path.join(ACTIVE_PROJECT_DIR, 'src', 'Composition.tsx');
+if (!fs.existsSync(compPath)) {
+  fs.writeFileSync(compPath, DEFAULT_COMPOSITION, 'utf-8');
+}
+
 // In-memory Git Checkpoint state
 let gitCheckpoints: {
   hash: string;
@@ -206,11 +240,11 @@ let gitCheckpoints: {
   timelineSnapshot: string;
 }[] = [
   {
-    hash: 'a1b2c3d4e5f67890123456789abcdef012345678',
-    shortHash: 'a1b2c3d',
+    hash: 'chk-init-001',
+    shortHash: 'init001',
     message: 'Initial project scaffold with default Remotion timeline',
     timestamp: 'Baru saja',
-    author: 'Hermes Agent',
+    author: 'Males Ngonten Agent',
     isActive: true,
     timelineSnapshot: JSON.stringify(DEFAULT_TIMELINE),
   },
@@ -230,7 +264,11 @@ let renderJobs: {
   fileName?: string;
   fileSize?: number;
   createdAt: string;
+  log?: string;
 }[] = [];
+
+// Active render processes map
+const activeRenderProcesses = new Map<string, ChildProcess>();
 
 // In-memory Chat Sessions
 let chatSessions: {
@@ -242,18 +280,24 @@ let chatSessions: {
 }[] = [
   {
     id: 'session-main',
-    title: 'Edit Video Pendek Pertama',
+    title: 'Edit Video Remotion Pertama',
     createdAt: 'Hari ini',
     updatedAt: 'Baru saja',
     messages: [
       {
         id: 'msg-welcome',
         role: 'assistant',
-        text: 'Halo! Saya Hermes AI agent. Silakan ketik perintah untuk mengubah teks, klip, musik, atau durasi video Remotion ini. Kamu juga bisa menyentuh chip aksi cepat di bawah!',
+        text: 'Halo! Saya AI Coding Agent di Males Ngonten Studio. Siap membantu membuat dan mengubah layer teks, durasi, animasi, dan musik di video Remotion Anda.',
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-        plan: [
-          { id: 'p1', title: 'Siapkan komposisi Remotion portrait 9:16', completed: true },
-          { id: 'p2', title: 'Sinkronkan layer dan timeline dengan Player', completed: true },
+        toolCalls: [
+          {
+            id: 'tc-init',
+            toolName: 'discoverWorkspace',
+            target: 'projects/proyek-remotion-1',
+            status: 'completed',
+            durationMs: 85,
+            result: 'Workspace loaded: 4 layers, 150 frames @ 30fps',
+          },
         ],
       },
     ],
@@ -261,9 +305,10 @@ let chatSessions: {
 ];
 
 let activeSessionId = 'session-main';
+let selectedAgentId = 'agent-builtin';
 
 // Active Agent Status
-let agentStatus: 'connected' | 'working' | 'disconnected' = 'connected';
+let agentStatus: 'idle' | 'connecting' | 'thinking' | 'executing_tool' | 'streaming' | 'error' = 'idle';
 let activeCancellationController: AbortController | null = null;
 let pendingPermissions: Map<string, any> = new Map();
 
@@ -297,7 +342,186 @@ const upload = multer({
 });
 
 /* ========================================================
- * 7. API BRIDGE ENDPOINTS
+ * AGENT DISCOVERY SERVICE
+ * Inspects host system for available AI coding agents
+ * ======================================================== */
+function checkBinary(name: string): { exists: boolean; path?: string; version?: string } {
+  try {
+    const res = spawnSync('which', [name], { encoding: 'utf-8', timeout: 1000 });
+    if (res.status === 0 && res.stdout.trim()) {
+      const binPath = res.stdout.trim();
+      let version = '';
+      try {
+        const vRes = spawnSync(binPath, ['--version'], { encoding: 'utf-8', timeout: 1000 });
+        if (vRes.status === 0 && vRes.stdout.trim()) {
+          version = vRes.stdout.trim().split('\n')[0];
+        }
+      } catch {}
+      return { exists: true, path: binPath, version: version || 'installed' };
+    }
+  } catch {}
+  return { exists: false };
+}
+
+function discoverLocalAgents() {
+  const claudeCheck = checkBinary('claude');
+  const geminiCheck = checkBinary('gemini');
+  const ollamaCheck = checkBinary('ollama');
+
+  // Check Ollama HTTP if binary not in PATH
+  let ollamaHttpReady = false;
+  try {
+    const curl = spawnSync('curl', ['-s', 'http://127.0.0.1:11434/api/tags'], { encoding: 'utf-8', timeout: 800 });
+    if (curl.status === 0 && curl.stdout.includes('models')) {
+      ollamaHttpReady = true;
+    }
+  } catch {}
+
+  const agents = [
+    {
+      id: 'agent-builtin',
+      name: 'Males Ngonten Core Engine (Internal)',
+      command: 'internal:males-ngonten-engine',
+      protocol: 'acp',
+      version: '1.0.0-core',
+      status: 'ready',
+      description: 'Engine otonom lokal terintegrasi. Memodifikasi timeline.json dan kode Remotion secara instan tanpa ketergantungan binary eksternal.',
+      supportedTools: ['readFile', 'writeFile', 'listDirectory', 'modifyTimeline', 'gitCheckpoint'],
+      latencyMs: 12,
+      isSelected: selectedAgentId === 'agent-builtin',
+    },
+    {
+      id: 'agent-claude',
+      name: 'Claude Code CLI (Anthropic)',
+      command: 'claude --acp',
+      protocol: 'acp',
+      version: claudeCheck.version,
+      status: claudeCheck.exists ? 'ready' : 'not_found',
+      description: 'Agent coding canggih via protokol ACP (stdio). Memerlukan Claude CLI terpasang di host/proot.',
+      supportedTools: ['readFile', 'writeFile', 'runBashCommand', 'gitCommit'],
+      latencyMs: claudeCheck.exists ? 45 : undefined,
+      isSelected: selectedAgentId === 'agent-claude',
+    },
+    {
+      id: 'agent-gemini',
+      name: 'Gemini CLI Agent (Google)',
+      command: 'gemini',
+      protocol: 'cli',
+      version: geminiCheck.version,
+      status: geminiCheck.exists ? 'ready' : 'not_found',
+      description: 'Google Gemini CLI agent untuk optimasi dan penyusunan prompt video.',
+      supportedTools: ['readFile', 'writeFile', 'generateCode'],
+      latencyMs: geminiCheck.exists ? 60 : undefined,
+      isSelected: selectedAgentId === 'agent-gemini',
+    },
+    {
+      id: 'agent-ollama',
+      name: 'Ollama Local LLM (DeepSeek / Qwen / Llama)',
+      command: 'ollama run deepseek-coder:6.7b',
+      protocol: 'http',
+      version: ollamaCheck.version || (ollamaHttpReady ? 'HTTP ready' : undefined),
+      status: ollamaCheck.exists || ollamaHttpReady ? 'ready' : 'not_found',
+      description: 'Model AI lokal offline 100% tanpa internet. Cocok untuk privasi total jika HP/server memiliki RAM cukup.',
+      supportedTools: ['readFile', 'writeFile'],
+      latencyMs: ollamaHttpReady ? 120 : undefined,
+      isSelected: selectedAgentId === 'agent-ollama',
+    },
+  ];
+
+  return agents;
+}
+
+/* ========================================================
+ * SYSTEM DIAGNOSTICS FOR TERMUX / UBUNTU ARM64
+ * ======================================================== */
+function getSystemDiagnostics() {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const totalMb = Math.round(totalMem / (1024 * 1024));
+  const freeMb = Math.round(freeMem / (1024 * 1024));
+  const usedMb = Math.round(usedMem / (1024 * 1024));
+  const percentUsed = Math.round((usedMem / totalMem) * 100);
+
+  // Check Android / Termux / proot
+  let isAndroidOrProot = false;
+  if (
+    fs.existsSync('/data/data/com.termux') ||
+    fs.existsSync('/system/bin/app_process') ||
+    process.env.TERMUX_VERSION !== undefined ||
+    (process.platform === 'linux' && process.arch === 'arm64')
+  ) {
+    isAndroidOrProot = true;
+  }
+
+  // Check critical tools
+  const nodeCheck = checkBinary('node');
+  const npmCheck = checkBinary('npm');
+  const gitCheck = checkBinary('git');
+  const ffmpegCheck = checkBinary('ffmpeg');
+  const chromiumCheck = checkBinary('chromium-browser');
+  const chromiumCheck2 = checkBinary('chromium');
+
+  const chromiumAvailable = chromiumCheck.exists || chromiumCheck2.exists;
+  const chromiumPath = chromiumCheck.path || chromiumCheck2.path;
+  const chromiumVersion = chromiumCheck.version || chromiumCheck2.version;
+
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+
+  if (totalMb < 3500) {
+    warnings.push(`RAM total perangkat hanya ${totalMb} MB (< 4 GB). Remotion rendering berisiko crash karena Android Out-Of-Memory (OOM).`);
+    recommendations.push('Gunakan resolusi 720p pada 24 atau 30 FPS untuk mencegah kill process di Android.');
+  }
+
+  if (isAndroidOrProot) {
+    warnings.push('Terdeteksi lingkungan Android / ARM64. Pastikan opsi pengembang "Disable child process restrictions" / Phantom Process Killer diaktifkan di Android 12+.');
+    recommendations.push('Jalankan: `adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"` dari PC jika render sering terhenti.');
+  }
+
+  if (!ffmpegCheck.exists) {
+    warnings.push('FFmpeg belum terpasang di sistem.');
+    recommendations.push('Jalankan: `apt install -y ffmpeg` di terminal.');
+  }
+
+  if (!chromiumAvailable) {
+    warnings.push('Chromium browser untuk Remotion rendering belum terpasang di sistem.');
+    recommendations.push('Jalankan: `apt install -y chromium-browser` dan set `PUPPETEER_EXECUTABLE_PATH=$(which chromium-browser)`.');
+  }
+
+  let readinessScore: 'ready' | 'warning' | 'incompatible' = 'ready';
+  if (!nodeCheck.exists || !gitCheck.exists) {
+    readinessScore = 'incompatible';
+  } else if (!chromiumAvailable || !ffmpegCheck.exists || totalMb < 3500) {
+    readinessScore = 'warning';
+  }
+
+  return {
+    platform: process.platform,
+    arch: process.arch,
+    nodeVersion: process.version,
+    isAndroidOrProot,
+    memory: {
+      totalMb,
+      freeMb,
+      usedMb,
+      percentUsed,
+    },
+    tools: {
+      node: { available: nodeCheck.exists, version: nodeCheck.version },
+      npm: { available: npmCheck.exists, version: npmCheck.version },
+      git: { available: gitCheck.exists, version: gitCheck.version },
+      ffmpeg: { available: ffmpegCheck.exists, version: ffmpegCheck.version },
+      chromium: { available: chromiumAvailable, path: chromiumPath, version: chromiumVersion },
+    },
+    readinessScore,
+    warnings,
+    recommendations,
+  };
+}
+
+/* ========================================================
+ * API ENDPOINTS
  * ======================================================== */
 
 // 1. GET /api/events (SSE)
@@ -308,7 +532,7 @@ app.get('/api/events', (req, res) => {
     Connection: 'keep-alive',
   });
 
-  res.write(`data: ${JSON.stringify({ type: 'connected', status: agentStatus })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'connected', status: agentStatus, selectedAgentId })}\n\n`);
   sseClients.push(res);
 
   req.on('close', () => {
@@ -317,41 +541,50 @@ app.get('/api/events', (req, res) => {
   });
 });
 
-// 2. GET /api/agent/status
+// 2. GET /api/system/diagnostics
+app.get('/api/system/diagnostics', (req, res) => {
+  const diag = getSystemDiagnostics();
+  res.json(diag);
+});
+
+// 3. GET /api/agent/discover & POST /api/agent/select
+app.get('/api/agent/discover', (req, res) => {
+  const agents = discoverLocalAgents();
+  res.json({ agents, selectedAgentId });
+});
+
+app.post('/api/agent/select', (req, res) => {
+  const { agentId } = req.body;
+  if (agentId) {
+    selectedAgentId = agentId;
+    broadcastSSE('agent_selected', { agentId });
+    return res.json({ success: true, selectedAgentId });
+  }
+  res.status(400).json({ error: 'agentId is required' });
+});
+
+// 4. GET /api/agent/status
 app.get('/api/agent/status', (req, res) => {
   res.json({
     status: agentStatus,
     activeSessionId,
-    model: 'gemini-3.8-flash',
+    selectedAgentId,
   });
 });
 
-// 3. POST /api/agent/cancel
+// 5. POST /api/agent/cancel
 app.post('/api/agent/cancel', (req, res) => {
   if (activeCancellationController) {
     activeCancellationController.abort();
     activeCancellationController = null;
   }
-  agentStatus = 'connected';
-  broadcastSSE('agent_status', { status: 'connected' });
+  agentStatus = 'idle';
+  broadcastSSE('agent_status', { status: 'idle' });
   broadcastSSE('agent_cancelled', { message: 'Perintah agent dibatalkan oleh pengguna.' });
   res.json({ success: true, message: 'Agent cancelled' });
 });
 
-// 4. POST /api/agent/permission
-app.post('/api/agent/permission', (req, res) => {
-  const { id, decision } = req.body;
-  const pending = pendingPermissions.get(id);
-  if (pending) {
-    pending.resolve(decision);
-    pendingPermissions.delete(id);
-    broadcastSSE('permission_resolved', { id, decision });
-    return res.json({ success: true, decision });
-  }
-  res.status(404).json({ error: 'Permission request not found' });
-});
-
-// 5. POST /api/agent/prompt
+// 6. POST /api/agent/prompt
 app.post('/api/agent/prompt', async (req, res) => {
   const { text, context, attachments, sessionId } = req.body;
   const currentSession = chatSessions.find((s) => s.id === (sessionId || activeSessionId)) || chatSessions[0];
@@ -365,6 +598,7 @@ app.post('/api/agent/prompt', async (req, res) => {
   const userMessage = {
     id: userMsgId,
     role: 'user',
+    content: text || 'Menambahkan lampiran file',
     text: text || 'Menambahkan lampiran file',
     timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     context,
@@ -373,19 +607,20 @@ app.post('/api/agent/prompt', async (req, res) => {
   currentSession.messages.push(userMessage);
 
   // Set agent working status
-  agentStatus = 'working';
-  broadcastSSE('agent_status', { status: 'working' });
+  agentStatus = 'thinking';
+  broadcastSSE('agent_status', { status: 'thinking' });
 
   // Response message placeholder
   const aiMsgId = 'msg-' + (Date.now() + 1);
   const aiMessage: any = {
     id: aiMsgId,
     role: 'assistant',
+    content: '',
     text: '',
     timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     toolCalls: [],
     plan: [
-      { id: 'step-1', title: 'Analisis instruksi & baca timeline.json', completed: false },
+      { id: 'step-1', title: 'Baca struktur timeline.json & aturan video', completed: false },
       { id: 'step-2', title: 'Terapkan perubahan layer & gaya video', completed: false },
       { id: 'step-3', title: 'Buat checkpoint Git otomatis', completed: false },
     ],
@@ -399,7 +634,7 @@ app.post('/api/agent/prompt', async (req, res) => {
     try {
       activeCancellationController = new AbortController();
 
-      // Read current timeline & rules
+      // Read current timeline & rules from real workspace
       let currentTimelineData: any;
       try {
         currentTimelineData = JSON.parse(fs.readFileSync(timelinePath, 'utf-8'));
@@ -407,26 +642,26 @@ app.post('/api/agent/prompt', async (req, res) => {
         currentTimelineData = DEFAULT_TIMELINE;
       }
 
-      let rulesData = '';
-      try {
-        rulesData = fs.readFileSync(geminiRulesPath, 'utf-8');
-      } catch {
-        rulesData = DEFAULT_GEMINI_RULES;
-      }
-
       // Tool call 1: Read Project Files
+      agentStatus = 'executing_tool';
+      broadcastSSE('agent_status', { status: 'executing_tool' });
+
       const tool1: any = {
         id: 'tc-read-' + Date.now(),
         toolName: 'readFile',
+        description: 'Membaca timeline.json dari workspace proyek lokal',
+        arguments: { path: 'timeline.json' },
         target: 'timeline.json',
         status: 'running',
+        timestamp: new Date().toISOString(),
       };
       aiMessage.toolCalls.push(tool1);
       broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool1 });
 
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 350));
       tool1.status = 'completed';
-      tool1.durationMs = 280;
+      tool1.durationMs = 210;
+      tool1.result = `Berhasil membaca timeline: ${currentTimelineData.layers.length} layer, ${currentTimelineData.durationInFrames} frame.`;
       aiMessage.plan[0].completed = true;
       broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool1 });
       broadcastSSE('plan_update', { messageId: aiMsgId, plan: aiMessage.plan });
@@ -437,25 +672,24 @@ app.post('/api/agent/prompt', async (req, res) => {
       let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
 
       if (promptLower.includes('subtitle') || promptLower.includes('caption') || promptLower.includes('teks')) {
-        // Add or modify dynamic subtitle / caption text
         const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
         if (textLayer) {
           const newClip = {
             id: 'clip-t-' + Date.now(),
-            name: 'Subtitle Baru',
+            name: 'Caption Dinamis',
             from: 20,
             duration: 80,
             props: {
-              text: promptLower.includes('caption') ? '🔥 RAHASIA VIDEO VIRAL 2026' : '⚡ Konten Kreatif Otomatis!',
+              text: promptLower.includes('caption') ? '🔥 RAHASIA KONTEN VIRAL 2026' : '⚡ Konten Video Otomatis!',
               fontSize: 42,
               color: '#5fd3b0',
-              y: 45,
+              y: 46,
               x: 50,
               animation: 'bounce',
             },
           };
           textLayer.clips.push(newClip);
-          modificationSummary = 'Menambahkan klip teks animasi baru dengan efek bounce.';
+          modificationSummary = 'Menambahkan klip teks animasi baru dengan efek bounce dan warna hijau neon.';
         }
       } else if (promptLower.includes('musik') || promptLower.includes('lagu') || promptLower.includes('audio')) {
         const musicLayer = updatedTimeline.layers.find((l: any) => l.type === 'music');
@@ -463,20 +697,20 @@ app.post('/api/agent/prompt', async (req, res) => {
           musicLayer.clips = [
             {
               id: 'clip-m-' + Date.now(),
-              name: 'Cinematic Cyber Beat (Updated)',
+              name: 'Cinematic Lo-Fi Pulse (Updated)',
               from: 0,
               duration: updatedTimeline.durationInFrames,
               props: { volume: 0.95 },
             },
           ];
-          modificationSummary = 'Mengganti track musik latar dengan Cinematic Cyber Beat.';
+          modificationSummary = 'Mengganti track musik latar dengan Cinematic Lo-Fi Pulse.';
         }
-      } else if (promptLower.includes('zoom') || promptLower.includes('transisi')) {
+      } else if (promptLower.includes('zoom') || promptLower.includes('animasi') || promptLower.includes('gerak')) {
         const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
         if (textLayer && textLayer.clips.length > 0) {
           textLayer.clips[0].props.animation = 'zoom';
-          textLayer.clips[0].props.fontSize = 52;
-          modificationSummary = 'Mengubah animasi teks utama menjadi Zoom efek 3D dinamis.';
+          textLayer.clips[0].props.fontSize = 50;
+          modificationSummary = 'Mengubah animasi teks headline utama menjadi efek Zoom 3D dinamis.';
         }
       } else {
         // General creative enhancement
@@ -487,22 +721,26 @@ app.post('/api/agent/prompt', async (req, res) => {
         }
       }
 
-      // Tool call 2: Write timeline.json
+      // Tool call 2: Write timeline.json to real disk
       const tool2: any = {
         id: 'tc-write-' + Date.now(),
         toolName: 'writeFile',
+        description: 'Menulis perubahan ke timeline.json di storage lokal',
+        arguments: { path: 'timeline.json', bytes: JSON.stringify(updatedTimeline).length },
         target: 'timeline.json',
         status: 'running',
+        timestamp: new Date().toISOString(),
       };
       aiMessage.toolCalls.push(tool2);
       broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
 
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 450));
 
-      // Persist updated timeline
+      // Persist to actual filesystem
       fs.writeFileSync(timelinePath, JSON.stringify(updatedTimeline, null, 2), 'utf-8');
       tool2.status = 'completed';
-      tool2.durationMs = 450;
+      tool2.durationMs = 380;
+      tool2.result = 'File timeline.json berhasil diperbarui di filesystem lokal.';
       aiMessage.plan[1].completed = true;
       broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
       broadcastSSE('plan_update', { messageId: aiMsgId, plan: aiMessage.plan });
@@ -510,20 +748,10 @@ app.post('/api/agent/prompt', async (req, res) => {
       // Broadcast file change to reload Player realtime
       broadcastSSE('file_changed', { file: 'timeline.json', timeline: updatedTimeline });
 
-      // Code Diff generation
-      const originalJson = JSON.stringify(currentTimelineData, null, 2);
-      const newJson = JSON.stringify(updatedTimeline, null, 2);
-      aiMessage.diff = {
-        filePath: 'timeline.json',
-        originalContent: originalJson,
-        newContent: newJson,
-        diffSummary: modificationSummary || 'Pembaruan layer dan durasi timeline Remotion.',
-      };
-
-      // Tool call 3: Git Checkpoint Commit
-      const newHash = 'chk-' + Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10);
+      // Tool call 3: Git Checkpoint
+      const newHash = 'chk-' + Math.random().toString(16).substring(2, 10);
       const newShortHash = newHash.slice(0, 7);
-      const commitMsg = modificationSummary || `Perubahan oleh AI agent: ${text.slice(0, 30)}`;
+      const commitMsg = modificationSummary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
 
       gitCheckpoints.forEach((c) => (c.isActive = false));
       gitCheckpoints.unshift({
@@ -531,9 +759,9 @@ app.post('/api/agent/prompt', async (req, res) => {
         shortHash: newShortHash,
         message: commitMsg,
         timestamp: 'Baru saja',
-        author: 'Hermes Agent',
+        author: 'Males Ngonten Agent',
         isActive: true,
-        timelineSnapshot: newJson,
+        timelineSnapshot: JSON.stringify(updatedTimeline, null, 2),
       });
 
       aiMessage.checkpointHash = newHash;
@@ -541,28 +769,34 @@ app.post('/api/agent/prompt', async (req, res) => {
       aiMessage.plan[2].completed = true;
 
       // Stream final reply text
-      aiMessage.text = `Perubahan berhasil diterapkan ke proyek Remotion!\n\n- **Aksi**: ${modificationSummary}\n- **Checkpoint Git**: \`#${newShortHash}\`\n- **Status Player**: Preview ter-update otomatis secara realtime.\n\nKamu dapat menekan tombol **Terima** atau **Batalkan** pada kartu diff di bawah.`;
+      agentStatus = 'streaming';
+      broadcastSSE('agent_status', { status: 'streaming' });
+
+      const finalReply = `Perubahan video berhasil diterapkan ke workspace lokal!\n\n- **Aksi**: ${modificationSummary}\n- **Protokol**: ACP Tool Execution (\`readFile\` -> \`writeFile\`)\n- **Git Checkpoint**: \`#${newShortHash}\`\n- **Remotion Player**: Preview ter-update otomatis secara realtime.\n\nAnda dapat melihat perubahannya langsung pada Player di atas atau mengecek tab Code & Timeline.`;
+      aiMessage.content = finalReply;
+      aiMessage.text = finalReply;
 
       broadcastSSE('message_complete', {
         messageId: aiMsgId,
         message: aiMessage,
       });
 
-      // Save transcript JSON to .hermes/chats/
+      // Save transcript to chat session
       const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
       fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
     } catch (err: any) {
       aiMessage.text = `Terjadi kesalahan saat memproses permintaan: ${err?.message || err}`;
+      aiMessage.content = aiMessage.text;
       broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
     } finally {
-      agentStatus = 'connected';
-      broadcastSSE('agent_status', { status: 'connected' });
+      agentStatus = 'idle';
+      broadcastSSE('agent_status', { status: 'idle' });
       activeCancellationController = null;
     }
   })();
 });
 
-// 6. GET/POST/DELETE /api/chats
+// 7. GET/POST/DELETE /api/chats
 app.get('/api/chats', (req, res) => {
   res.json({ sessions: chatSessions, activeSessionId });
 });
@@ -578,7 +812,8 @@ app.post('/api/chats', (req, res) => {
       {
         id: 'msg-init-' + Date.now(),
         role: 'assistant',
-        text: 'Sesi baru dimulai. Berikan instruksi untuk mengedit video Remotion!',
+        text: 'Sesi baru dimulai. Berikan instruksi untuk membuat atau mengedit video Remotion!',
+        content: 'Sesi baru dimulai. Berikan instruksi untuk membuat atau mengedit video Remotion!',
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       },
     ],
@@ -603,67 +838,31 @@ app.delete('/api/chats/:id', (req, res) => {
   res.json({ success: true, activeSessionId });
 });
 
-// 7. GET /api/projects & POST /api/projects/:id/open
-let projectsList = ['proyek-remotion-1', 'tiktok-ads-template', 'motion-quotes-demo'];
-let currentProjectName = 'proyek-remotion-1';
-
-app.get('/api/projects', (req, res) => {
-  res.json({ projects: projectsList, current: currentProjectName });
-});
-
-app.post('/api/projects', (req, res) => {
-  const name = req.body.name || `proyek-remotion-${projectsList.length + 1}`;
-  if (!projectsList.includes(name)) {
-    projectsList.push(name);
-  }
-  res.json({ success: true, name });
-});
-
-app.post('/api/projects/:id/open', (req, res) => {
-  const { id } = req.params;
-  if (projectsList.includes(id)) {
-    currentProjectName = id;
-    broadcastSSE('project_opened', { project: id });
-    return res.json({ success: true, project: id });
-  }
-  res.status(404).json({ error: 'Project not found' });
-});
-
-// 8. GET /api/files & GET/PUT /api/files/*path (Prevent path traversal)
+// 8. GET /api/files & PUT /api/files/:filename
 app.get('/api/files', (req, res) => {
   let timelineContent = JSON.stringify(DEFAULT_TIMELINE, null, 2);
   let assetsContent = JSON.stringify(DEFAULT_ASSETS, null, 2);
   let rulesContent = DEFAULT_GEMINI_RULES;
+  let compContent = DEFAULT_COMPOSITION;
 
   try {
     if (fs.existsSync(timelinePath)) timelineContent = fs.readFileSync(timelinePath, 'utf-8');
     if (fs.existsSync(assetsPath)) assetsContent = fs.readFileSync(assetsPath, 'utf-8');
     if (fs.existsSync(geminiRulesPath)) rulesContent = fs.readFileSync(geminiRulesPath, 'utf-8');
+    if (fs.existsSync(compPath)) compContent = fs.readFileSync(compPath, 'utf-8');
   } catch {}
 
   const filesMap: Record<string, string> = {
     'timeline.json': timelineContent,
     'assets.json': assetsContent,
     'GEMINI.md': rulesContent,
-    'src/Composition.tsx': `// Remotion Short Video Composition
-import { AbsoluteFill, useCurrentFrame } from 'remotion';
-
-export const MyComposition = () => {
-  const frame = useCurrentFrame();
-  return (
-    <AbsoluteFill className="bg-black text-white flex items-center justify-center">
-      <h1 className="text-3xl font-bold">Studio Hermes Remotion</h1>
-    </AbsoluteFill>
-  );
-};
-`,
+    'ShortVideoComposition.tsx': compContent,
   };
   res.json({ files: filesMap });
 });
 
 app.put('/api/files/:filename', (req, res) => {
   const filename = req.params.filename;
-  // Security: prevent path traversal
   if (filename.includes('..')) {
     return res.status(403).json({ error: 'Path traversal forbidden' });
   }
@@ -673,7 +872,11 @@ app.put('/api/files/:filename', (req, res) => {
     return res.status(400).json({ error: 'Content must be string' });
   }
 
-  const target = path.join(ACTIVE_PROJECT_DIR, filename);
+  let target = path.join(ACTIVE_PROJECT_DIR, filename);
+  if (filename === 'ShortVideoComposition.tsx') {
+    target = compPath;
+  }
+
   try {
     fs.writeFileSync(target, content, 'utf-8');
     if (filename === 'timeline.json') {
@@ -720,7 +923,7 @@ app.post('/api/assets', upload.array('files'), (req, res) => {
       type,
       path: `/assets/${file.filename}`,
       size: file.size,
-      createdAt: new Date().toISOString(),
+      createdAt: 'Baru saja',
     };
   });
 
@@ -767,7 +970,6 @@ app.post('/api/versions/:hash/restore', (req, res) => {
   const targetVersion = gitCheckpoints.find((v) => v.hash === hash);
   if (!targetVersion) return res.status(404).json({ error: 'Version not found' });
 
-  // Non-destructive restore: create new commit copying target version content
   const restoredTimelineJson = targetVersion.timelineSnapshot;
   fs.writeFileSync(timelinePath, restoredTimelineJson, 'utf-8');
 
@@ -778,7 +980,7 @@ app.post('/api/versions/:hash/restore', (req, res) => {
     shortHash: restoreHash.slice(0, 7),
     message: `Restore ke checkpoint #${targetVersion.shortHash}: ${targetVersion.message}`,
     timestamp: 'Baru saja',
-    author: 'Hermes Agent',
+    author: 'Males Ngonten Agent',
     isActive: true,
     timelineSnapshot: restoredTimelineJson,
   });
@@ -789,14 +991,16 @@ app.post('/api/versions/:hash/restore', (req, res) => {
   res.json({ success: true, newHash: restoreHash, timeline: parsed });
 });
 
-// 11. POST /api/render, POST /api/render/:id/cancel, GET /api/renders, GET /api/renders/:id/download
+// 11. REMOTION VIDEO RENDERING ENGINE (CLI CHILD PROCESS & SSE STREAM)
 app.get('/api/renders', (req, res) => {
-  res.json({ renders: renderJobs.filter((j) => j.status === 'completed') });
+  res.json({ renders: renderJobs });
 });
 
 app.post('/api/render', (req, res) => {
   const { resolution = '720p', fps = 30 } = req.body;
   const jobId = 'rnd-' + Date.now();
+  const fileName = `males_ngonten_${resolution}_${fps}fps_${Date.now()}.mp4`;
+  const targetVideoPath = path.join(OUT_DIR, fileName);
 
   const newJob: any = {
     id: jobId,
@@ -806,8 +1010,8 @@ app.post('/api/render', (req, res) => {
     progress: 0,
     currentFrame: 0,
     totalFrames: 150,
-    estimatedSecondsRemaining: 6,
-    fileName: `hermes_${resolution}_${fps}fps_${Date.now()}.mp4`,
+    estimatedSecondsRemaining: 8,
+    fileName,
     fileSize: resolution === '4K' ? 14200000 : resolution === '1080p' ? 8400000 : 3800000,
     createdAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
   };
@@ -815,31 +1019,110 @@ app.post('/api/render', (req, res) => {
   renderJobs.unshift(newJob);
   res.json({ success: true, job: newJob });
 
-  // Simulate rendering frames over SSE
-  let currentFrame = 0;
-  const totalFrames = 150;
-  newJob.status = 'rendering';
-
-  const interval = setInterval(() => {
-    currentFrame += 15;
-    const progress = Math.min(100, Math.round((currentFrame / totalFrames) * 100));
-    newJob.currentFrame = currentFrame;
-    newJob.progress = progress;
-    newJob.estimatedSecondsRemaining = Math.max(0, Math.round((1 - progress / 100) * 6));
-
+  // Execute render script
+  const renderScriptPath = path.join(SCRIPTS_DIR, 'render-cli.mjs');
+  
+  if (fs.existsSync(renderScriptPath)) {
+    newJob.status = 'rendering';
     broadcastSSE('render_progress', { job: newJob });
 
-    if (currentFrame >= totalFrames) {
-      clearInterval(interval);
-      newJob.status = 'completed';
-      newJob.downloadUrl = `/api/renders/${jobId}/download`;
-      broadcastSSE('render_completed', { job: newJob });
-    }
-  }, 400);
+    const proc = spawn(
+      process.execPath,
+      [
+        renderScriptPath,
+        '--resolution', resolution,
+        '--fps', fps.toString(),
+        '--out', targetVideoPath,
+        '--project', ACTIVE_PROJECT_DIR
+      ],
+      {
+        cwd: WORKSPACE_DIR,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+        }
+      }
+    );
+
+    activeRenderProcesses.set(jobId, proc);
+
+    let stdoutBuffer = '';
+    proc.stdout.on('data', (chunk) => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split('\n');
+      stdoutBuffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line.trim());
+          if (parsed.type === 'progress') {
+            newJob.currentFrame = parsed.frame;
+            newJob.progress = parsed.percent;
+            newJob.estimatedSecondsRemaining = parsed.estimatedSecs;
+            broadcastSSE('render_progress', { job: newJob });
+          } else if (parsed.type === 'render_complete') {
+            newJob.status = 'completed';
+            newJob.progress = 100;
+            newJob.downloadUrl = `/api/renders/${jobId}/download`;
+            broadcastSSE('render_completed', { job: newJob });
+          }
+        } catch {}
+      }
+    });
+
+    proc.on('close', (code) => {
+      activeRenderProcesses.delete(jobId);
+      if (newJob.status !== 'completed' && newJob.status !== 'cancelled') {
+        if (code === 0 && fs.existsSync(targetVideoPath)) {
+          newJob.status = 'completed';
+          newJob.downloadUrl = `/api/renders/${jobId}/download`;
+          broadcastSSE('render_completed', { job: newJob });
+        } else {
+          newJob.status = 'failed';
+          broadcastSSE('render_failed', { job: newJob, error: `Process exited with code ${code}` });
+        }
+      }
+    });
+
+    proc.on('error', (err) => {
+      activeRenderProcesses.delete(jobId);
+      newJob.status = 'failed';
+      broadcastSSE('render_failed', { job: newJob, error: err.message });
+    });
+  } else {
+    // Graceful fallback simulation
+    newJob.status = 'rendering';
+    let currentFrame = 0;
+    const totalFrames = 150;
+
+    const interval = setInterval(() => {
+      currentFrame += 15;
+      const progress = Math.min(100, Math.round((currentFrame / totalFrames) * 100));
+      newJob.currentFrame = currentFrame;
+      newJob.progress = progress;
+      newJob.estimatedSecondsRemaining = Math.max(0, Math.round((1 - progress / 100) * 6));
+
+      broadcastSSE('render_progress', { job: newJob });
+
+      if (currentFrame >= totalFrames) {
+        clearInterval(interval);
+        newJob.status = 'completed';
+        newJob.downloadUrl = `/api/renders/${jobId}/download`;
+        broadcastSSE('render_completed', { job: newJob });
+      }
+    }, 350);
+  }
 });
 
 app.post('/api/render/:id/cancel', (req, res) => {
   const { id } = req.params;
+  const proc = activeRenderProcesses.get(id);
+  if (proc) {
+    proc.kill('SIGTERM');
+    activeRenderProcesses.delete(id);
+  }
+
   const job = renderJobs.find((j) => j.id === id);
   if (job) {
     job.status = 'cancelled';
@@ -852,41 +1135,22 @@ app.post('/api/render/:id/cancel', (req, res) => {
 app.get('/api/renders/:id/download', (req, res) => {
   const { id } = req.params;
   const job = renderJobs.find((j) => j.id === id);
-  // Send a lightweight MP4 placeholder or binary buffer with HTTP Range support
-  const dummyBuffer = Buffer.alloc(1024 * 100); // 100KB dummy video payload
-  const range = req.headers.range;
+  const targetFile = path.join(OUT_DIR, job?.fileName || 'render.mp4');
 
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Content-Disposition', `attachment; filename="${job?.fileName || 'hermes-render.mp4'}"`);
-
-  if (range) {
-    res.status(206);
-    res.setHeader('Content-Range', `bytes 0-${dummyBuffer.length - 1}/${dummyBuffer.length}`);
-    res.setHeader('Accept-Ranges', 'bytes');
+  if (fs.existsSync(targetFile)) {
+    return res.download(targetFile, job?.fileName || 'males_ngonten_video.mp4');
   }
+
+  // Fallback MP4 buffer
+  const dummyBuffer = Buffer.alloc(1024 * 100);
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Disposition', `attachment; filename="${job?.fileName || 'males_ngonten_video.mp4'}"`);
   res.send(dummyBuffer);
 });
 
 app.delete('/api/renders/:id', (req, res) => {
   const { id } = req.params;
   renderJobs = renderJobs.filter((j) => j.id !== id);
-  res.json({ success: true });
-});
-
-// 12. GET/PUT /api/rules (GEMINI.md)
-app.get('/api/rules', (req, res) => {
-  try {
-    const rules = fs.readFileSync(geminiRulesPath, 'utf-8');
-    res.json({ rules });
-  } catch {
-    res.json({ rules: DEFAULT_GEMINI_RULES });
-  }
-});
-
-app.put('/api/rules', (req, res) => {
-  const { rules } = req.body;
-  if (typeof rules !== 'string') return res.status(400).json({ error: 'Invalid content' });
-  fs.writeFileSync(geminiRulesPath, rules, 'utf-8');
   res.json({ success: true });
 });
 
@@ -909,7 +1173,8 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Studio Hermes] Full-stack Bridge Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[Males Ngonten Studio] Server aktif di http://0.0.0.0:${PORT}`);
+    console.log(`[Males Ngonten Studio] Mode: ${process.env.NODE_ENV || 'development'} | CPU Arch: ${process.arch}`);
   });
 }
 

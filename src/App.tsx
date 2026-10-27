@@ -7,9 +7,10 @@ import {
   Sliders,
   Sparkles,
   SplitSquareVertical,
-  Maximize2,
-  Minimize2,
-  Tv,
+  Film,
+  Bot,
+  Activity,
+  CheckCircle,
 } from 'lucide-react';
 
 import { useStudioState } from './state/useStudioState';
@@ -19,6 +20,8 @@ import { ChatPanel } from './components/chat/ChatPanel';
 import { TimelineDetailPanel } from './components/timeline/TimelineDetailPanel';
 import { CodeEditorPanel } from './components/code/CodeEditorPanel';
 import { AssetTab } from './components/assets/AssetTab';
+import { RenderTab } from './components/render/RenderTab';
+import { AgentDiscoveryDrawer } from './components/agent/AgentDiscoveryDrawer';
 import { ChatHistorySheet } from './components/history/ChatHistorySheet';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectAsset, TimelineClip, TimelineLayer } from './types';
@@ -27,20 +30,26 @@ const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
 // Powered by Remotion v4.0 & Males Ngonten Studio AI Agent
 
 import React from 'react';
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
-import { TimelineData } from '../types';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 
-export const ShortVideoComposition: React.FC<{ timeline: TimelineData }> = ({ timeline }) => {
+export const ShortVideoComposition: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Active layers rendered deterministically per frame
   return (
     <AbsoluteFill className="bg-black select-none overflow-hidden font-sans">
-      {/* 1. Dynamic Background Layer */}
-      {/* 2. Text Motion Layer with Spring Animations */}
-      {/* 3. Subtitles & Narration Layer */}
-      {/* 4. Audio Waveform Visualizer */}
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#201315] to-[#0d0c10]" />
+      
+      {/* Title */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-lg">
+          Males Ngonten Studio 🐱
+        </h1>
+        <p className="text-xl text-[#e5484d] font-semibold mt-4">
+          AI Coding Agent Video Engine
+        </p>
+      </div>
     </AbsoluteFill>
   );
 };
@@ -66,6 +75,11 @@ export default function App() {
     messages,
     assets,
     setAssets,
+    currentRenderJob,
+    completedRenderJobs,
+    handleStartRender,
+    handleCancelRender,
+    handleDeleteRender,
     handleUpdateClipPosition,
     handleUpdateClipTiming,
     handleSelectClip,
@@ -76,8 +90,10 @@ export default function App() {
     handleDeleteSession,
   } = useStudioState();
 
-  // Bottom secondary drawer for Timeline / Code / Assets / Settings
-  const [activeDrawer, setActiveDrawer] = useState<'none' | 'timeline' | 'code' | 'assets' | 'settings'>('none');
+  // Bottom drawer state
+  const [activeDrawer, setActiveDrawer] = useState<
+    'none' | 'timeline' | 'code' | 'assets' | 'settings' | 'render' | 'agent'
+  >('none');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Code editor state
@@ -210,6 +226,7 @@ export default function App() {
         onToggleSplitMode={handleToggleSplitMode}
         onOpenChatHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setActiveDrawer('settings')}
+        onOpenAgentDiscovery={() => setActiveDrawer('agent')}
         onNewChat={handleNewChat}
       />
 
@@ -232,63 +249,99 @@ export default function App() {
         </section>
 
         {/* Mini Navigation Bar between Player & Chat */}
-        <div className="h-[34px] px-3 bg-[#131318] border-b border-[#23232b] flex items-center justify-between gap-2 shrink-0 select-none">
-          {/* Active Session & Agent Indicator */}
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="h-[36px] px-2.5 bg-[#131318] border-b border-[#23232b] flex items-center justify-between gap-1.5 shrink-0 select-none overflow-x-auto no-scrollbar">
+          {/* Active Session & Agent Discovery Button */}
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               type="button"
               onClick={() => setIsHistoryOpen(true)}
               className="tap flex items-center gap-1.5 text-xs text-[#a4a4b4] hover:text-white font-medium truncate"
             >
               <MessageSquare className="w-3.5 h-3.5 text-[#e5484d] shrink-0" />
-              <span className="truncate max-w-[180px] sm:max-w-[320px]">
+              <span className="truncate max-w-[130px] sm:max-w-[240px]">
                 {activeSession?.title || 'Sesi Video'}
               </span>
             </button>
           </div>
 
           {/* Tools & Panels Switcher */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Agent & Diagnostics */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawer('agent')}
+              title="Deteksi Agent & Kompatibilitas ARM64"
+              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
+                activeDrawer === 'agent'
+                  ? 'bg-[#c92a2a] text-white shadow-sm'
+                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden xs:inline">Agent</span>
+            </button>
+
+            {/* Timeline */}
             <button
               type="button"
               onClick={() => setActiveDrawer('timeline')}
               title="Buka Timeline Multi-Track"
-              className={`tap px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
                 activeDrawer === 'timeline'
                   ? 'bg-[#c92a2a] text-white'
                   : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
               }`}
             >
-              <Layers className="w-3 h-3" />
+              <Layers className="w-3.5 h-3.5" />
               <span>Timeline</span>
             </button>
 
+            {/* Code */}
             <button
               type="button"
               onClick={() => setActiveDrawer('code')}
               title="Lihat Kode Remotion TSX"
-              className={`tap px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
                 activeDrawer === 'code'
                   ? 'bg-[#c92a2a] text-white'
                   : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
               }`}
             >
-              <FileCode className="w-3 h-3" />
+              <FileCode className="w-3.5 h-3.5" />
               <span>Code</span>
             </button>
 
+            {/* Assets */}
             <button
               type="button"
               onClick={() => setActiveDrawer('assets')}
               title="Aset Media"
-              className={`tap px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
                 activeDrawer === 'assets'
                   ? 'bg-[#c92a2a] text-white'
                   : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
               }`}
             >
-              <FolderOpen className="w-3 h-3" />
+              <FolderOpen className="w-3.5 h-3.5" />
               <span>Aset</span>
+            </button>
+
+            {/* Render MP4 */}
+            <button
+              type="button"
+              onClick={() => setActiveDrawer('render')}
+              title="Render Video MP4"
+              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors relative ${
+                activeDrawer === 'render'
+                  ? 'bg-[#c92a2a] text-white shadow-sm'
+                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5 text-[#e5484d]" />
+              <span>Render</span>
+              {currentRenderJob && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e5484d] animate-ping ml-0.5" />
+              )}
             </button>
           </div>
         </div>
@@ -322,6 +375,12 @@ export default function App() {
         onSelectSession={handleSwitchSession}
         onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
+      />
+
+      {/* Agent Discovery & System Diagnostics Drawer */}
+      <AgentDiscoveryDrawer
+        isOpen={activeDrawer === 'agent'}
+        onClose={() => setActiveDrawer('none')}
       />
 
       {/* Multi-track Timeline Drawer */}
@@ -390,6 +449,24 @@ export default function App() {
           usedBytes={totalAssetsSize}
           maxBytes={500 * 1024 * 1024}
         />
+      </BottomSheet>
+
+      {/* Remotion Video Render Drawer */}
+      <BottomSheet
+        isOpen={activeDrawer === 'render'}
+        onClose={() => setActiveDrawer('none')}
+        title="Render & Ekspor Video"
+        subtitle="Konversi proyek Remotion menjadi file video MP4 mandiri"
+      >
+        <div className="h-[60vh]">
+          <RenderTab
+            currentJob={currentRenderJob}
+            completedJobs={completedRenderJobs}
+            onStartRender={handleStartRender}
+            onCancelRender={handleCancelRender}
+            onDeleteRender={handleDeleteRender}
+          />
+        </div>
       </BottomSheet>
 
       {/* Settings / Open Source ACP Info Drawer */}
