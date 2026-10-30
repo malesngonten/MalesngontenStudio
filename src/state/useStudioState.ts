@@ -164,7 +164,9 @@ export function useStudioState() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>('clip-t1');
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>('layer-text');
-  const [splitMode, setSplitMode] = useState<'50-50' | 'player-focus' | 'chat-focus'>('50-50');
+  const [splitMode, setSplitMode] = useState<
+    '50-50' | 'player-focus' | 'canvas-full' | 'chat-focus'
+  >('50-50');
 
   // Agent State
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle');

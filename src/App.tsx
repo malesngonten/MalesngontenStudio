@@ -1,23 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import {
-  MessageSquare,
-  Layers,
-  FileCode,
-  FolderOpen,
-  Sliders,
-  Sparkles,
-  SplitSquareVertical,
-  Film,
-  Bot,
-  Activity,
-  CheckCircle,
-} from 'lucide-react';
-
 import { useStudioState } from './state/useStudioState';
-import { Header } from './components/header/Header';
+import { Header, StudioView } from './components/header/Header';
 import { RemotionPreview } from './components/player/RemotionPreview';
 import { ChatPanel } from './components/chat/ChatPanel';
-import { TimelineDetailPanel } from './components/timeline/TimelineDetailPanel';
+import { StoryboardView } from './components/storyboard/StoryboardView';
 import { CodeEditorPanel } from './components/code/CodeEditorPanel';
 import { AssetTab } from './components/assets/AssetTab';
 import { RenderTab } from './components/render/RenderTab';
@@ -25,6 +11,9 @@ import { AgentDiscoveryDrawer } from './components/agent/AgentDiscoveryDrawer';
 import { ChatHistorySheet } from './components/history/ChatHistorySheet';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectAsset, TimelineClip, TimelineLayer } from './types';
+import { Timeline } from './components/timeline/Timeline';
+import { BottomToolbar } from './components/toolbar/BottomToolbar';
+import { Bot } from 'lucide-react';
 
 const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
 // Powered by Remotion v4.0 & Males Ngonten Studio AI Agent
@@ -38,7 +27,7 @@ export const ShortVideoComposition: React.FC = () => {
 
   return (
     <AbsoluteFill className="bg-black select-none overflow-hidden font-sans">
-      {/* Dynamic Background */}
+      {/* Dynamic Ambient Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#201315] to-[#0d0c10]" />
       
       {/* Title */}
@@ -90,11 +79,23 @@ export default function App() {
     handleDeleteSession,
   } = useStudioState();
 
-  // Bottom drawer state
-  const [activeDrawer, setActiveDrawer] = useState<
-    'none' | 'timeline' | 'code' | 'assets' | 'settings' | 'render' | 'agent'
-  >('none');
+  // Active Main View (AI-first tabs: Studio, Storyboard, Kode, Aset)
+  const [activeView, setActiveView] = useState<StudioView>('studio');
+
+  // Timeline track visibility state (Always appears with Remotion player when active)
+  const [isTimelineVisible, setIsTimelineVisible] = useState<boolean>(true);
+
+  // Chat panel visibility state for expansive studio
+  const [isDesktopChatOpen, setIsDesktopChatOpen] = useState<boolean>(true);
+
+  // Modals / Drawers
+  const [isRenderOpen, setIsRenderOpen] = useState(false);
+  const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Pre-filled prompt from canvas element action
+  const [prefilledPrompt, setPrefilledPrompt] = useState<string>('');
 
   // Code editor state
   const [activeFile, setActiveFile] = useState('ShortVideoComposition.tsx');
@@ -117,16 +118,29 @@ export default function App() {
     [setCurrentFrame]
   );
 
-  // Toggle layout split mode (50-50 -> player-focus -> chat-focus)
-  const handleToggleSplitMode = useCallback(() => {
-    setSplitMode((prev) => {
-      if (prev === '50-50') return 'player-focus';
-      if (prev === 'player-focus') return 'chat-focus';
-      return '50-50';
+  // Smart timeline toggle: on mobile, yields chat so Remotion player is never squeezed
+  const handleToggleTimeline = useCallback(() => {
+    setIsTimelineVisible((prev) => {
+      const next = !prev;
+      if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsDesktopChatOpen(false);
+      }
+      return next;
     });
-  }, [setSplitMode]);
+  }, []);
 
-  // Handle timeline clip props update from detail panel
+  // Smart chat toggle: on mobile, yields timeline so Remotion player is never squeezed
+  const handleToggleChat = useCallback(() => {
+    setIsDesktopChatOpen((prev) => {
+      const next = !prev;
+      if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsTimelineVisible(false);
+      }
+      return next;
+    });
+  }, []);
+
+  // Handle timeline clip props update
   const handleUpdateClipProps = useCallback(
     (layerId: string, clipId: string, updatedProps: any) => {
       setTimeline((prev) => {
@@ -189,25 +203,29 @@ export default function App() {
   // Dynamic vertical split height calculation
   const getPlayerHeightClass = () => {
     switch (splitMode) {
+      case 'canvas-full':
+        return 'h-full md:w-full';
       case 'player-focus':
-        return 'h-[65%] sm:h-[60%]';
+        return 'h-[65%] sm:h-[62%] md:w-[62%]';
       case 'chat-focus':
-        return 'h-[35%] sm:h-[35%]';
+        return 'h-[35%] sm:h-[35%] md:w-[35%]';
       case '50-50':
       default:
-        return 'h-[50%]';
+        return 'h-[50%] md:w-1/2';
     }
   };
 
   const getChatHeightClass = () => {
     switch (splitMode) {
+      case 'canvas-full':
+        return 'hidden';
       case 'player-focus':
-        return 'h-[35%] sm:h-[40%]';
+        return 'h-[35%] sm:h-[38%] md:w-[38%]';
       case 'chat-focus':
-        return 'h-[65%] sm:h-[65%]';
+        return 'h-[65%] sm:h-[65%] md:w-[65%]';
       case '50-50':
       default:
-        return 'h-[50%]';
+        return 'h-[50%] md:w-1/2';
     }
   };
 
@@ -216,182 +234,94 @@ export default function App() {
   const totalAssetsSize = assets.reduce((sum, a) => sum + (a.size || 0), 0);
 
   return (
-    <div className="w-full h-dvh max-h-dvh flex flex-col bg-[#0b0b0e] text-[#f2f2f5] antialiased overflow-hidden select-none font-sans">
-      {/* 1. Brand Header */}
+    <div className="w-full h-dvh max-h-dvh flex flex-col bg-[#09090b] text-[#f4f4f5] antialiased overflow-hidden select-none font-sans">
+      {/* 1. Clean Header: Brand + ACP Connection Status + Ekspor MP4 button */}
       <Header
+        onOpenRender={() => setIsRenderOpen(true)}
+        isRendering={!!currentRenderJob}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         agentStatus={agentStatus}
-        sessionsCount={sessions.length}
-        activeSessionTitle={activeSession?.title}
-        splitMode={splitMode}
-        onToggleSplitMode={handleToggleSplitMode}
-        onOpenChatHistory={() => setIsHistoryOpen(true)}
-        onOpenSettings={() => setActiveDrawer('settings')}
-        onOpenAgentDiscovery={() => setActiveDrawer('agent')}
-        onNewChat={handleNewChat}
+        onOpenAgentDiscovery={() => setIsAgentDrawerOpen(true)}
       />
 
-      {/* 2. Main 50:50 Vertical Split Workspace */}
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-        {/* Top Half: Remotion Video Player */}
-        <section
-          className={`w-full ${getPlayerHeightClass()} flex flex-col transition-all duration-200 border-b border-[#23232b] relative shrink-0`}
-        >
-          <RemotionPreview
-            timeline={timeline}
-            currentFrame={currentFrame}
-            onFrameUpdate={handleFrameUpdate}
-            isPlaying={isPlaying}
-            onPlayPauseToggle={handlePlayPauseToggle}
-            selectedClipId={selectedClipId}
-            onSelectClip={handleSelectClip}
-            onUpdateClipPosition={handleUpdateClipPosition}
-          />
-        </section>
-
-        {/* Mini Navigation Bar between Player & Chat */}
-        <div className="h-[36px] px-2.5 bg-[#131318] border-b border-[#23232b] flex items-center justify-between gap-1.5 shrink-0 select-none overflow-x-auto no-scrollbar">
-          {/* Active Session & Agent Discovery Button */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsHistoryOpen(true)}
-              className="tap flex items-center gap-1.5 text-xs text-[#a4a4b4] hover:text-white font-medium truncate"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-[#e5484d] shrink-0" />
-              <span className="truncate max-w-[130px] sm:max-w-[240px]">
-                {activeSession?.title || 'Sesi Video'}
-              </span>
-            </button>
-          </div>
-
-          {/* Tools & Panels Switcher */}
-          <div className="flex items-center gap-1 shrink-0">
-            {/* Agent & Diagnostics */}
-            <button
-              type="button"
-              onClick={() => setActiveDrawer('agent')}
-              title="Deteksi Agent & Kompatibilitas ARM64"
-              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
-                activeDrawer === 'agent'
-                  ? 'bg-[#c92a2a] text-white shadow-sm'
-                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
+      {/* 2. Main Workspace (with pb-14 for fixed bottom toolbar) */}
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative pb-14">
+        {/* VIEW 1: STUDIO (AI Canvas + Collapsible Synced Timeline + AI Director Command Center as Primary Focus) */}
+        {activeView === 'studio' && (
+          <div className="w-full h-full flex flex-col md:flex-row overflow-hidden relative">
+            {/* Primary Studio Canvas Stage: Remotion Video Canvas + Collapsible Timeline Tracks */}
+            <section
+              className={`w-full flex flex-col relative shrink-0 min-h-0 bg-[#070709] transition-all duration-300 ${
+                isDesktopChatOpen
+                  ? 'flex-1 md:flex-1 h-[50vh] sm:h-[54vh] md:h-full'
+                  : 'h-full flex-1'
               }`}
             >
-              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden xs:inline">Agent</span>
-            </button>
+              {/* Remotion Player Preview Canvas - ALWAYS expansive, never squeezed */}
+              <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+                <RemotionPreview
+                  timeline={timeline}
+                  currentFrame={currentFrame}
+                  onFrameUpdate={handleFrameUpdate}
+                  isPlaying={isPlaying}
+                  onPlayPauseToggle={handlePlayPauseToggle}
+                  selectedClipId={selectedClipId}
+                  onSelectClip={handleSelectClip}
+                  onUpdateClipPosition={handleUpdateClipPosition}
+                  onPromptElementAction={(text, action) => {
+                    setPrefilledPrompt(`Tolong ubah elemen "${text}": ${action}`);
+                  }}
+                  isTimelineOpen={isTimelineVisible}
+                  onToggleTimeline={handleToggleTimeline}
+                />
+              </div>
 
-            {/* Timeline */}
-            <button
-              type="button"
-              onClick={() => setActiveDrawer('timeline')}
-              title="Buka Timeline Multi-Track"
-              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
-                activeDrawer === 'timeline'
-                  ? 'bg-[#c92a2a] text-white'
-                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Timeline</span>
-            </button>
-
-            {/* Code */}
-            <button
-              type="button"
-              onClick={() => setActiveDrawer('code')}
-              title="Lihat Kode Remotion TSX"
-              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
-                activeDrawer === 'code'
-                  ? 'bg-[#c92a2a] text-white'
-                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
-              }`}
-            >
-              <FileCode className="w-3.5 h-3.5" />
-              <span>Code</span>
-            </button>
-
-            {/* Assets */}
-            <button
-              type="button"
-              onClick={() => setActiveDrawer('assets')}
-              title="Aset Media"
-              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors ${
-                activeDrawer === 'assets'
-                  ? 'bg-[#c92a2a] text-white'
-                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
-              }`}
-            >
-              <FolderOpen className="w-3.5 h-3.5" />
-              <span>Aset</span>
-            </button>
-
-            {/* Render MP4 */}
-            <button
-              type="button"
-              onClick={() => setActiveDrawer('render')}
-              title="Render Video MP4"
-              className={`tap px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors relative ${
-                activeDrawer === 'render'
-                  ? 'bg-[#c92a2a] text-white shadow-sm'
-                  : 'text-[#8e8e9c] hover:text-white hover:bg-[#1f1f28]'
-              }`}
-            >
-              <Film className="w-3.5 h-3.5 text-[#e5484d]" />
-              <span>Render</span>
-              {currentRenderJob && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#e5484d] animate-ping ml-0.5" />
+              {/* Timeline Track: Yields on mobile when Chat is open so the Remotion Player is NEVER compromised */}
+              {isTimelineVisible && (
+                <div
+                  className={`shrink-0 bg-[#0c0c0e] z-20 transition-all duration-200 ${
+                    isDesktopChatOpen
+                      ? 'hidden md:block max-h-[145px] overflow-y-auto'
+                      : 'block'
+                  }`}
+                >
+                  <Timeline
+                    timeline={timeline}
+                    currentFrame={currentFrame}
+                    onSeek={handleFrameUpdate}
+                    selectedClipId={selectedClipId}
+                    onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
+                    onUpdateClipTiming={handleUpdateClipTiming}
+                  />
+                </div>
               )}
-            </button>
+            </section>
+
+            {/* AI Director Command Center: Primary Focus directly visible on Desktop & Mobile */}
+            {isDesktopChatOpen && (
+              <section className="w-full md:w-[380px] lg:w-[420px] flex-1 md:flex-none md:h-full flex flex-col min-h-0 relative bg-[#09090b] z-30">
+                <ChatPanel
+                  messages={messages}
+                  isAgentWorking={
+                    agentStatus === 'thinking' ||
+                    agentStatus === 'executing_tool' ||
+                    agentStatus === 'streaming'
+                  }
+                  onSendMessage={handleSendMessage}
+                  onStopAgent={handleStopAgent}
+                  currentSec={currentSec}
+                  selectedClipName={selectedClip?.name}
+                  prefilledPrompt={prefilledPrompt}
+                  onClose={() => setIsDesktopChatOpen(false)}
+                />
+              </section>
+            )}
           </div>
-        </div>
+        )}
 
-        {/* Bottom Half: AI Agent Chat Panel */}
-        <section
-          className={`w-full ${getChatHeightClass()} flex flex-col transition-all duration-200 min-h-0 relative`}
-        >
-          <ChatPanel
-            messages={messages}
-            isAgentWorking={
-              agentStatus === 'thinking' ||
-              agentStatus === 'executing_tool' ||
-              agentStatus === 'streaming'
-            }
-            onSendMessage={handleSendMessage}
-            onStopAgent={handleStopAgent}
-            currentSec={currentSec}
-            selectedClipName={selectedClip?.name}
-          />
-        </section>
-      </main>
-
-      {/* 3. Drawers & Modals */}
-      {/* Chat History Drawer */}
-      <ChatHistorySheet
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={handleSwitchSession}
-        onNewChat={handleNewChat}
-        onDeleteSession={handleDeleteSession}
-      />
-
-      {/* Agent Discovery & System Diagnostics Drawer */}
-      <AgentDiscoveryDrawer
-        isOpen={activeDrawer === 'agent'}
-        onClose={() => setActiveDrawer('none')}
-      />
-
-      {/* Multi-track Timeline Drawer */}
-      <BottomSheet
-        isOpen={activeDrawer === 'timeline'}
-        onClose={() => setActiveDrawer('none')}
-        title="Timeline Multi-Track Remotion"
-        subtitle="Geser playhead atau klip untuk mengatur waktu muncul dan durasi"
-      >
-        <div className="space-y-4">
-          <TimelineDetailPanel
+        {/* VIEW 2: STORYBOARD & SCENE CARDS */}
+        {activeView === 'storyboard' && (
+          <StoryboardView
             timeline={timeline}
             currentFrame={currentFrame}
             onSeek={handleFrameUpdate}
@@ -404,61 +334,82 @@ export default function App() {
             onUpdateClipProps={handleUpdateClipProps}
             onUpdateClipTiming={handleUpdateClipTiming}
             onDeleteClip={handleDeleteClip}
+            onCommandAI={(prompt) => {
+              setActiveView('studio');
+              setPrefilledPrompt(prompt);
+            }}
           />
-        </div>
-      </BottomSheet>
+        )}
 
-      {/* Code Inspector Drawer */}
+        {/* VIEW 3: KODE (Remotion TSX & JSON Editor) */}
+        {activeView === 'code' && (
+          <div className="w-full h-full p-3 sm:p-4 bg-[#09090b]">
+            <div className="w-full h-full rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+              <CodeEditorPanel
+                files={filesState}
+                activeFile={activeFile}
+                onSelectFile={(f) => setActiveFile(f)}
+                onSaveFile={(f, content) =>
+                  setFilesState((prev) => ({ ...prev, [f]: content }))
+                }
+                isAgentEditingFile={agentStatus !== 'idle'}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 4: ASET (Media Storage & Uploads) */}
+        {activeView === 'assets' && (
+          <div className="w-full h-full p-3 sm:p-4 bg-[#09090b] overflow-y-auto">
+            <div className="max-w-4xl mx-auto">
+              <AssetTab
+                assets={assets}
+                onUploadAssets={handleUploadAssets}
+                onDeleteAsset={(id) =>
+                  setAssets((prev) => prev.filter((a) => a.id !== id))
+                }
+                onUseAssetInChat={(asset: ProjectAsset) => {
+                  setActiveView('studio');
+                  handleSendMessage(
+                    `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
+                    []
+                  );
+                }}
+                usedBytes={totalAssetsSize}
+                maxBytes={500 * 1024 * 1024}
+              />
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* 3. Drawers & Dialogs */}
+
+      {/* Chat History Drawer */}
+      <ChatHistorySheet
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={handleSwitchSession}
+        onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
+      />
+
+      {/* Agent Discovery & ARM64 Diagnostics Drawer */}
+      <AgentDiscoveryDrawer
+        isOpen={isAgentDrawerOpen}
+        onClose={() => setIsAgentDrawerOpen(false)}
+      />
+
+      {/* Render & Export Video Modal */}
       <BottomSheet
-        isOpen={activeDrawer === 'code'}
-        onClose={() => setActiveDrawer('none')}
-        title="Remotion TSX Code & Timeline JSON"
-        subtitle="Arsitektur kode deklaratif ShortVideoComposition.tsx"
+        isOpen={isRenderOpen}
+        onClose={() => setIsRenderOpen(false)}
+        title="Ekspor Video Remotion MP4"
+        subtitle="Rendering deterministik lokal via Remotion CLI"
       >
         <div className="h-[55vh]">
-          <CodeEditorPanel
-            files={filesState}
-            activeFile={activeFile}
-            onSelectFile={(f) => setActiveFile(f)}
-            onSaveFile={(f, content) =>
-              setFilesState((prev) => ({ ...prev, [f]: content }))
-            }
-            isAgentEditingFile={agentStatus !== 'idle'}
-          />
-        </div>
-      </BottomSheet>
-
-      {/* Assets Drawer */}
-      <BottomSheet
-        isOpen={activeDrawer === 'assets'}
-        onClose={() => setActiveDrawer('none')}
-        title="Penyimpanan Aset Media"
-        subtitle="Aset lokal yang dapat digunakan oleh AI agent dalam video"
-      >
-        <AssetTab
-          assets={assets}
-          onUploadAssets={handleUploadAssets}
-          onDeleteAsset={(id) => setAssets((prev) => prev.filter((a) => a.id !== id))}
-          onUseAssetInChat={(asset: ProjectAsset) => {
-            handleSendMessage(
-              `Tolong masukkan aset "${asset.name}" sebagai background video di timeline`,
-              []
-            );
-            setActiveDrawer('none');
-          }}
-          usedBytes={totalAssetsSize}
-          maxBytes={500 * 1024 * 1024}
-        />
-      </BottomSheet>
-
-      {/* Remotion Video Render Drawer */}
-      <BottomSheet
-        isOpen={activeDrawer === 'render'}
-        onClose={() => setActiveDrawer('none')}
-        title="Render & Ekspor Video"
-        subtitle="Konversi proyek Remotion menjadi file video MP4 mandiri"
-      >
-        <div className="h-[60vh]">
           <RenderTab
             currentJob={currentRenderJob}
             completedJobs={completedRenderJobs}
@@ -469,16 +420,16 @@ export default function App() {
         </div>
       </BottomSheet>
 
-      {/* Settings / Open Source ACP Info Drawer */}
+      {/* Settings / Open Source Info Modal */}
       <BottomSheet
-        isOpen={activeDrawer === 'settings'}
-        onClose={() => setActiveDrawer('none')}
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         title="Tentang Males Ngonten Studio"
-        subtitle="Arsitektur Open-Source AI Coding Agent & Remotion Video Engine"
+        subtitle="Studio Pembuatan Video Berbasis AI Coding Agent & Remotion Engine"
       >
-        <div className="space-y-4 text-xs text-[#a0a0af]">
-          <div className="flex items-center gap-3 p-3 bg-[#15151c] rounded-xl border border-[#262633]">
-            <div className="w-10 h-10 rounded-lg overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
+        <div className="space-y-4 text-xs text-zinc-400">
+          <div className="flex items-center gap-3 p-3.5 bg-zinc-900/80 rounded-2xl border border-white/5">
+            <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center shadow-md">
               <img
                 src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
                 alt="Males Ngonten Logo"
@@ -487,42 +438,55 @@ export default function App() {
             </div>
             <div>
               <p className="font-bold text-white text-sm">Males Ngonten Studio</p>
-              <p className="text-[11px] text-[#787889]">
-                Versi 1.0 • Protokol ACP (Agent Client Protocol)
+              <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                v1.0 • Protokol ACP (Agent Client Protocol)
               </p>
             </div>
           </div>
 
-          <div className="p-3 bg-[#121217] rounded-xl border border-white/5 space-y-2">
-            <p className="font-semibold text-white">Visi Jangka Panjang:</p>
+          <div className="p-3.5 bg-zinc-900/40 rounded-2xl border border-white/5 space-y-2">
+            <p className="font-semibold text-white">Konsep AI Studio:</p>
             <p className="leading-relaxed">
-              Platform open-source untuk pembuatan & pengeditan video otomatis tanpa repot.
-              Mendukung beragam AI agent (Claude, Gemini, DeepSeek, Ollama lokal) melalui protokol
-              standar ACP, menggunakan Remotion sebagai mesin rendering deterministik di perangkat
-              pengguna.
+              Males Ngonten Studio dirancang agar pengguna cukup memberikan instruksi natural
+              kepada AI Agent. AI Agent secara langsung mengubah komposisi kode Remotion secara
+              deklaratif, memperbarui preview secara real-time, dan merender video MP4 berkualitas
+              tinggi secara lokal di perangkat Anda.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-            <div className="p-2.5 rounded-lg bg-[#15151c] border border-white/5">
-              <span className="text-[#6d6d7e]">Video Engine:</span>
-              <p className="font-semibold text-white mt-0.5">Remotion v4.0</p>
+            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <span className="text-zinc-500">Video Engine:</span>
+              <p className="font-semibold text-white mt-1">Remotion v4.0</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-[#15151c] border border-white/5">
-              <span className="text-[#6d6d7e]">Agent Protocol:</span>
-              <p className="font-semibold text-white mt-0.5">ACP v1.0 Standard</p>
+            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <span className="text-zinc-500">Agent Protocol:</span>
+              <p className="font-semibold text-white mt-1">ACP JSON-RPC stdio</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-[#15151c] border border-white/5">
-              <span className="text-[#6d6d7e]">Workspace:</span>
-              <p className="font-semibold text-white mt-0.5">Local Device Storage</p>
+            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <span className="text-zinc-500">Target Output:</span>
+              <p className="font-semibold text-white mt-1">9:16 Shorts / TikTok</p>
             </div>
-            <div className="p-2.5 rounded-lg bg-[#15151c] border border-white/5">
-              <span className="text-[#6d6d7e]">Target Format:</span>
-              <p className="font-semibold text-white mt-0.5">9:16 Portrait (Shorts)</p>
+            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <span className="text-zinc-500">Target Device:</span>
+              <p className="font-semibold text-white mt-1">Termux + Ubuntu ARM64</p>
             </div>
           </div>
         </div>
       </BottomSheet>
+
+      {/* 4. Fixed Horizontally Scrollable Bottom Toolbar with Pinned Chat AI Primary Button */}
+      <BottomToolbar
+        activeView={activeView}
+        onSelectView={setActiveView}
+        isChatOpen={isDesktopChatOpen}
+        onToggleChat={handleToggleChat}
+        isTimelineVisible={isTimelineVisible}
+        onToggleTimeline={handleToggleTimeline}
+        sessionsCount={sessions.length}
+        onOpenChatHistory={() => setIsHistoryOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
     </div>
   );
 }

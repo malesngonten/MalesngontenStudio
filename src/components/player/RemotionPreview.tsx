@@ -3,11 +3,8 @@ import { Player, PlayerRef } from '@remotion/player';
 import {
   Play,
   Pause,
-  Maximize,
+  Maximize2,
   RotateCcw,
-  Move,
-  Check,
-  Sparkles,
   Layers,
 } from 'lucide-react';
 import { TimelineData, TimelineClip } from '../../types';
@@ -22,6 +19,9 @@ interface RemotionPreviewProps {
   selectedClipId: string | null;
   onSelectClip: (layerId: string, clipId: string) => void;
   onUpdateClipPosition?: (layerId: string, clipId: string, x: number, y: number) => void;
+  onPromptElementAction?: (elementName: string, defaultAction: string) => void;
+  isTimelineOpen?: boolean;
+  onToggleTimeline?: () => void;
 }
 
 export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
@@ -33,6 +33,9 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   selectedClipId,
   onSelectClip,
   onUpdateClipPosition,
+  onPromptElementAction,
+  isTimelineOpen,
+  onToggleTimeline,
 }) => {
   const playerRef = useRef<PlayerRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,7 +68,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
         lastFrameRef.current = currentFrame;
         playerRef.current.seekTo(currentFrame);
       }
-    } catch (e) {
+    } catch {
       // player mounting
     }
   }, [currentFrame]);
@@ -79,7 +82,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
       } else if (!isPlaying && playerRef.current.isPlaying()) {
         playerRef.current.pause();
       }
-    } catch (e) {
+    } catch {
       // player playback
     }
   }, [isPlaying]);
@@ -116,6 +119,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   // Format time display
   const currentSec = (currentFrame / timeline.fps).toFixed(2);
   const totalSec = (timeline.durationInFrames / timeline.fps).toFixed(2);
+  const progressPercent = Math.min(100, (currentFrame / (timeline.durationInFrames - 1 || 1)) * 100);
 
   // Active text clips at current frame that can be dragged
   const activeTextClips: { layerId: string; clip: TimelineClip }[] = [];
@@ -139,74 +143,89 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     e.stopPropagation();
     e.preventDefault();
 
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-
     onSelectClip(layerId, clip.id);
-    if (isPlaying) {
-      onPlayPauseToggle(); // Pause to adjust
-    }
 
-    const currentX = clip.props?.x ?? 50;
-    const currentY = clip.props?.y ?? 50;
+    const initialX = clip.props?.x ?? 50;
+    const initialY = clip.props?.y ?? 50;
 
     setDraggingClip({
       layerId,
       clipId: clip.id,
       startX: e.clientX,
       startY: e.clientY,
-      initialX: currentX,
-      initialY: currentY,
-      currentX,
-      currentY,
+      initialX,
+      initialY,
+      currentX: initialX,
+      currentY: initialY,
     });
+
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Pointer capture fallback
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!draggingClip || !videoFrameRef.current || !onUpdateClipPosition) return;
+    e.stopPropagation();
+    e.preventDefault();
+
     const rect = videoFrameRef.current.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
+    if (rect.width === 0 || rect.height === 0) return;
 
-    const deltaXPercent = ((e.clientX - draggingClip.startX) / rect.width) * 100;
-    const deltaYPercent = ((e.clientY - draggingClip.startY) / rect.height) * 100;
+    const deltaPixelX = e.clientX - draggingClip.startX;
+    const deltaPixelY = e.clientY - draggingClip.startY;
 
-    let newX = Math.round(draggingClip.initialX + deltaXPercent);
-    let newY = Math.round(draggingClip.initialY + deltaYPercent);
+    const deltaPercentX = (deltaPixelX / rect.width) * 100;
+    const deltaPercentY = (deltaPixelY / rect.height) * 100;
 
-    // Magnetic snap to center (50%)
-    if (Math.abs(newX - 50) < 3) newX = 50;
-    if (Math.abs(newY - 50) < 3) newY = 50;
+    let nextX = Math.round(draggingClip.initialX + deltaPercentX);
+    let nextY = Math.round(draggingClip.initialY + deltaPercentY);
 
-    newX = Math.max(8, Math.min(92, newX));
-    newY = Math.max(8, Math.min(92, newY));
+    // Snap to horizontal / vertical center
+    if (Math.abs(nextX - 50) < 3) nextX = 50;
+    if (Math.abs(nextY - 50) < 3) nextY = 50;
 
-    setDraggingClip((prev) => (prev ? { ...prev, currentX: newX, currentY: newY } : null));
-    onUpdateClipPosition(draggingClip.layerId, draggingClip.clipId, newX, newY);
+    // Constrain within frame bounds
+    nextX = Math.max(5, Math.min(95, nextX));
+    nextY = Math.max(5, Math.min(95, nextY));
+
+    setDraggingClip((prev) => (prev ? { ...prev, currentX: nextX, currentY: nextY } : null));
+    onUpdateClipPosition(draggingClip.layerId, draggingClip.clipId, nextX, nextY);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!draggingClip) return;
-    try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // ignore
+    if (draggingClip) {
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // Fallback
+      }
+      setDraggingClip(null);
     }
-    setDraggingClip(null);
+  };
+
+  // Scrubber bar seek
+  const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const frame = parseInt(e.target.value, 10);
+    onFrameUpdate(frame);
   };
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex flex-col bg-[#0d0d10] select-none relative overflow-hidden"
+      className="w-full h-full flex flex-col bg-[#050507] select-none relative overflow-hidden"
     >
-      {/* Video Viewport Area */}
-      <div className="flex-1 relative flex items-center justify-center p-2 min-h-0 bg-radial from-[#15151a] to-[#0a0a0c]">
-        {/* Aspect Ratio 9:16 Frame */}
+      {/* Video Viewport Area with Ambient Glow */}
+      <div className="flex-1 relative flex items-center justify-center p-3 sm:p-4 min-h-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900/40 via-[#09090b] to-[#050507]">
+        {/* Aspect Ratio 9:16 Canvas Frame */}
         <div
           ref={videoFrameRef}
-          className="h-full aspect-[9/16] bg-black shadow-2xl relative flex items-center justify-center overflow-hidden rounded-xl border border-[#232329]"
+          className="h-full aspect-[9/16] bg-black shadow-2xl relative flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 ring-1 ring-white/5"
           style={{ maxHeight: '100%' }}
         >
-          {/* Remotion Player */}
+          {/* Remotion Player Engine */}
           <Player
             ref={playerRef}
             component={ShortVideoComposition}
@@ -225,15 +244,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             loop
           />
 
-          {/* Center Crosshair Guidelines when dragging near center */}
-          {draggingClip && draggingClip.currentX === 50 && (
-            <div className="absolute inset-y-0 left-1/2 w-[1px] bg-red-500/70 pointer-events-none z-40" />
-          )}
-          {draggingClip && draggingClip.currentY === 50 && (
-            <div className="absolute inset-x-0 top-1/2 h-[1px] bg-red-500/70 pointer-events-none z-40" />
-          )}
-
-          {/* Interactive Drag & Drop Overlay on Active Text Elements */}
+          {/* Interactive Drag & Drop Hit Target on Active Elements (pure video, zero HUD/instruction clutter) */}
           {!isPlaying &&
             activeTextClips.map(({ layerId, clip }) => {
               const isSelected = selectedClipId === clip.id;
@@ -254,52 +265,32 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
                     transform: 'translate(-50%, -50%)',
                     touchAction: 'none',
                   }}
-                  className={`cursor-move select-none z-30 transition-shadow ${
+                  className={`cursor-move select-none z-30 ${
                     isSelected
-                      ? 'ring-2 ring-[#e5484d] ring-offset-2 ring-offset-black/60 rounded-xl'
-                      : 'hover:ring-1 hover:ring-white/50 rounded-xl'
+                      ? 'ring-1 ring-[#e5484d]/40 rounded-lg'
+                      : 'hover:ring-1 hover:ring-white/20 rounded-lg'
                   }`}
                 >
-                  <div className="p-2 relative group">
-                    {/* Drag Handle Tag */}
-                    {isSelected && (
-                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#e5484d] text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md whitespace-nowrap pointer-events-none">
-                        <Move className="w-2.5 h-2.5" />
-                        <span>Geser ({posX}%, {posY}%)</span>
-                      </div>
-                    )}
-                    {/* Ghost hit target matching text */}
-                    <div className="opacity-0 pointer-events-none text-center px-4 py-2 font-extrabold text-sm whitespace-nowrap">
+                  <div className="p-1 relative">
+                    {/* Invisible hit target matching text area */}
+                    <div className="opacity-0 pointer-events-none text-center px-3 py-1 font-bold text-sm whitespace-nowrap">
                       {clip.props?.text || clip.name}
                     </div>
                   </div>
                 </div>
               );
             })}
-
-          {/* Pause / Drag Hint Overlay */}
-          {!isPlaying && (
-            <div className="absolute top-2 left-2 z-20 pointer-events-none bg-black/60 backdrop-blur-xs text-[#8f8f9c] text-[10px] px-2 py-0.5 rounded-md border border-white/10 flex items-center gap-1">
-              <Move className="w-2.5 h-2.5 text-[#e5484d]" />
-              <span>Drag teks untuk ubah posisi</span>
-            </div>
-          )}
-
-          {/* Resolution Badge */}
-          <div className="absolute top-2 right-2 z-20 pointer-events-none bg-black/60 backdrop-blur-xs text-[#8f8f9c] text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10">
-            9:16 • 1080p
-          </div>
         </div>
       </div>
 
-      {/* Control Bar */}
-      <div className="h-[42px] px-3 bg-[#111114] border-t border-[#232329] flex items-center justify-between gap-3 shrink-0 z-20">
+      {/* Floating Glass Control Dock - Kapsul & Gradasi Jelas Tanpa Border */}
+      <div className="h-12 px-3 sm:px-4 bg-gradient-to-t from-[#0e0e14]/95 via-[#0c0c10]/90 to-transparent backdrop-blur-md flex items-center justify-between gap-3 shrink-0 z-20">
+        {/* Left: Play/Pause & Timing (Kapsul Bulat) */}
         <div className="flex items-center gap-2.5">
-          {/* Play/Pause Button */}
           <button
             type="button"
             onClick={onPlayPauseToggle}
-            className="tap w-8 h-8 rounded-full bg-[#c92a2a] hover:bg-[#b02525] flex items-center justify-center text-white active:scale-95 transition-all shadow-md"
+            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 flex items-center justify-center text-white active:scale-95 transition-all shadow-md shadow-red-950/50 shrink-0"
             aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
           >
             {isPlaying ? (
@@ -309,36 +300,66 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             )}
           </button>
 
-          {/* Time & Frame Counter */}
-          <div className="flex items-center gap-1.5 text-xs font-mono tabular-nums">
-            <span className="text-white font-semibold">{currentSec}s</span>
-            <span className="text-[#656570]">/ {totalSec}s</span>
-            <span className="text-[10px] text-[#656570] bg-[#1a1a20] px-1.5 py-0.5 rounded border border-[#272733]">
-              F{currentFrame}
-            </span>
+          {/* Time indicator (Kapsul) */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-zinc-900/90 to-zinc-800/80 text-xs font-mono tabular-nums text-zinc-300 shadow-xs">
+            <span className="font-bold text-white">{currentSec}s</span>
+            <span className="text-zinc-500">/</span>
+            <span className="text-zinc-400">{totalSec}s</span>
           </div>
         </div>
 
-        {/* Right Tools */}
-        <div className="flex items-center gap-2">
-          {/* Reset to Start */}
+        {/* Center: Slim Timeline Scrubber (Kapsul) */}
+        <div className="flex-1 max-w-xs sm:max-w-md mx-2 flex items-center">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(1, timeline.durationInFrames - 1)}
+            value={currentFrame}
+            onChange={handleScrubberChange}
+            className="w-full h-1.5 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded-full appearance-none cursor-pointer accent-red-500 hover:h-2 transition-all shadow-inner"
+            title="Geser timeline frame"
+          />
+        </div>
+
+        {/* Right: Quick actions (Semua Kapsul & Gradasi) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onToggleTimeline && (
+            <button
+              type="button"
+              onClick={onToggleTimeline}
+              title={isTimelineOpen ? 'Sembunyikan Timeline Track' : 'Tampilkan Timeline Track'}
+              className={`tap px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold transition-all ${
+                isTimelineOpen
+                  ? 'bg-gradient-to-r from-red-950/90 via-rose-900/80 to-red-900/90 text-rose-200 shadow-md'
+                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Layers className={`w-3.5 h-3.5 ${isTimelineOpen ? 'text-rose-400' : 'text-zinc-400'}`} />
+              <span className="hidden xs:inline">{isTimelineOpen ? 'Track' : 'Track'}</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isTimelineOpen ? 'bg-red-400' : 'bg-zinc-600'
+                }`}
+              />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => onFrameUpdate(0)}
-            title="Ulangi dari frame 0"
-            className="tap w-7 h-7 rounded-md flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] transition-colors"
+            title="Reset ke awal (Frame 0)"
+            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white shadow-xs transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
 
-          {/* Fullscreen */}
           <button
             type="button"
             onClick={handleFullscreen}
-            title="Layar Penuh"
-            className="tap w-7 h-7 rounded-md flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] transition-colors"
+            title="Mode Layar Penuh"
+            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white shadow-xs transition-colors"
           >
-            <Maximize className="w-3.5 h-3.5" />
+            <Maximize2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

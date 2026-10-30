@@ -1,152 +1,110 @@
 import React from 'react';
-import {
-  MessageSquare,
-  Sliders,
-  Sparkles,
-  Maximize2,
-  Columns2,
-  SplitSquareVertical,
-  Plus,
-} from 'lucide-react';
+import { Film } from 'lucide-react';
 import { AgentStatus } from '../../contracts/agentProtocol';
 
+export type StudioView = 'studio' | 'storyboard' | 'code' | 'assets';
+
 interface HeaderProps {
+  onOpenRender: () => void;
+  isRendering?: boolean;
+  onOpenSettings?: () => void;
   agentStatus: AgentStatus;
-  sessionsCount: number;
-  activeSessionTitle?: string;
-  splitMode: '50-50' | 'player-focus' | 'chat-focus';
-  onToggleSplitMode: () => void;
-  onOpenChatHistory: () => void;
-  onOpenSettings: () => void;
   onOpenAgentDiscovery?: () => void;
-  onNewChat: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  agentStatus,
-  sessionsCount,
-  activeSessionTitle,
-  splitMode,
-  onToggleSplitMode,
-  onOpenChatHistory,
+  onOpenRender,
+  isRendering,
   onOpenSettings,
+  agentStatus,
   onOpenAgentDiscovery,
-  onNewChat,
 }) => {
-  const getStatusBadge = () => {
+  const getStatusIndicator = () => {
     switch (agentStatus) {
       case 'thinking':
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-300 bg-amber-950/60 border border-amber-700/50 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-            <span>Agent Berpikir...</span>
-          </span>
+          <div className="flex items-center gap-1.5 text-amber-300 font-medium text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="hidden xs:inline">Berpikir...</span>
+          </div>
         );
       case 'executing_tool':
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-            <span>Eksekusi Tool ACP</span>
-          </span>
+          <div className="flex items-center gap-1.5 text-cyan-300 font-medium text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="hidden xs:inline">Tool ACP</span>
+          </div>
         );
       case 'streaming':
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-purple-300 bg-purple-950/60 border border-purple-700/50 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-            <span>Menulis Kode...</span>
-          </span>
-        );
-      case 'connecting':
-        return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 bg-slate-800/60 border border-slate-700 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
-            <span>Menghubungkan...</span>
-          </span>
+          <div className="flex items-center gap-1.5 text-rose-300 font-medium text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            <span className="hidden xs:inline">Menulis Kode</span>
+          </div>
         );
       case 'idle':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-950/50 border border-emerald-800/40 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <div className="flex items-center gap-1.5 text-emerald-400 font-medium text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>ACP Siap</span>
-          </span>
+          </div>
         );
     }
   };
 
   return (
-    <header className="h-[48px] bg-[#111114] border-b border-[#24242a] px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
-      {/* Brand & Logo */}
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="w-7 h-7 rounded-lg overflow-hidden bg-[#c92a2a] shrink-0 border border-red-500/40 shadow-sm flex items-center justify-center">
-          <img
-            src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
-            alt="Males Ngonten Logo"
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="min-w-0 flex flex-col">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-white tracking-tight truncate">
-              MALES NGONTEN
+    <header className="h-12 bg-gradient-to-b from-[#141418] via-[#0d0d10] to-[#09090b] px-3 sm:px-4 flex items-center justify-between gap-2 select-none shrink-0 z-30 shadow-md">
+      {/* 1. Left: Brand Logo & Title */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          title="Tentang Males Ngonten Studio"
+          className="tap flex items-center gap-2 text-left group transition-transform active:scale-98"
+        >
+          <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-red-500 to-rose-700 shrink-0 shadow-md flex items-center justify-center p-0.5">
+            <img
+              src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
+              alt="Males Ngonten Logo"
+              className="w-full h-full object-cover rounded-full"
+            />
+          </div>
+          <div className="min-w-0 flex items-center gap-1.5">
+            <span className="text-xs sm:text-sm font-bold tracking-tight text-white group-hover:text-red-400 transition-colors truncate">
+              Males Ngonten
             </span>
-            <span className="text-[10px] font-bold text-[#e5484d] uppercase tracking-wider bg-red-950/70 border border-red-800/50 px-1 rounded">
-              STUDIO
+            <span className="text-[10px] font-bold text-red-300 bg-gradient-to-r from-red-600/30 to-rose-600/20 px-2 py-0.5 rounded-full tracking-wide uppercase">
+              AI
             </span>
           </div>
-          <span className="text-[9px] text-[#858591] truncate font-mono hidden xs:inline">
-            Remotion AI Coding Engine
-          </span>
-        </div>
+        </button>
       </div>
 
-      {/* Middle: Agent Status Button */}
-      <button
-        type="button"
-        onClick={onOpenAgentDiscovery}
-        title="Buka Status Agent & Diagnostik Sistem"
-        className="tap hover:opacity-90 transition-opacity"
-      >
-        {getStatusBadge()}
-      </button>
-
-      {/* Right Controls */}
-      <div className="flex items-center gap-1 shrink-0">
-        {/* Toggle 50:50 Layout */}
+      {/* 2. Right: ACP Status + Primary Ekspor Button (Kapsul, Tanpa Border, Gradasi Jelas) */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Indikator Koneksi AI Agent (ACP) di sebelah Ekspor */}
         <button
           type="button"
-          onClick={onToggleSplitMode}
-          title={
-            splitMode === '50-50'
-              ? 'Tampilan Vertikal 50:50 (Aktif)'
-              : splitMode === 'player-focus'
-              ? 'Fokus Player Video'
-              : 'Fokus Chat Agent'
-          }
-          className="tap w-8 h-8 rounded-lg flex items-center justify-center text-[#8e8e99] hover:text-white hover:bg-[#1f1f25] border border-transparent hover:border-[#2f2f38] transition-colors"
+          onClick={onOpenAgentDiscovery}
+          title="Koneksi AI Coding Agent (ACP). Klik untuk melihat diagnostik ARM64 & agen lokal"
+          className="tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-zinc-800/90 to-zinc-900/90 hover:from-zinc-700/90 hover:to-zinc-800/90 shadow-sm transition-all text-xs"
         >
-          <SplitSquareVertical className="w-4 h-4" />
+          {getStatusIndicator()}
         </button>
 
-        {/* History / Sessions Button */}
+        {/* Tombol Ekspor MP4 (Kapsul Gradasi Jelas) */}
         <button
           type="button"
-          onClick={onOpenChatHistory}
-          title="Riwayat Percakapan AI"
-          className="tap flex items-center gap-1 px-2 h-8 rounded-lg text-[#b0b0bc] hover:text-white bg-[#1a1a20] hover:bg-[#25252e] border border-[#292933] text-xs font-medium transition-colors"
+          onClick={onOpenRender}
+          title="Ekspor Video Remotion MP4"
+          className="tap flex items-center gap-1.5 px-4 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white text-xs font-semibold shadow-md shadow-red-950/40 transition-all"
         >
-          <MessageSquare className="w-3.5 h-3.5 text-[#e5484d]" />
-          <span className="font-mono text-[11px]">{sessionsCount}</span>
-        </button>
-
-        {/* New Chat Button */}
-        <button
-          type="button"
-          onClick={onNewChat}
-          title="Mulai Percakapan Baru"
-          className="tap w-8 h-8 rounded-lg flex items-center justify-center text-white bg-[#c92a2a] hover:bg-[#b02525] transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
+          <Film className="w-3.5 h-3.5" />
+          <span>Ekspor MP4</span>
+          {isRendering && (
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping ml-0.5" />
+          )}
         </button>
       </div>
     </header>
