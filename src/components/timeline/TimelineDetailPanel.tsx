@@ -108,8 +108,8 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
         onUpdateClipTiming={onUpdateClipTiming}
       />
 
-      {/* 2. Timeline Quick Bar: Add Layer & Track Summary */}
-      <div className="px-3 py-2 bg-[#121214] border-b border-[#27272c] flex items-center justify-between gap-2">
+      {/* 2. Timeline Quick Bar: Add Layer & Track Summary (Tanpa border, gradasi lembut) */}
+      <div className="px-3 py-2 bg-gradient-to-r from-[#141419] via-[#101014] to-[#0e0e12] flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-1.5 text-xs text-[#8b8b94]">
           <Layers className="w-3.5 h-3.5 text-[#e5484d]" />
           <span>{timeline.layers.length} Track Aktif</span>
@@ -132,15 +132,15 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
       {/* 3. Clip Inspector Panel (When a clip is selected) */}
       <div className="p-3 space-y-3">
         {selectedClip && selectedLayer ? (
-          <div className="bg-[#18181b] border border-[#303036] rounded-2xl p-3.5 shadow-lg space-y-3 animate-in fade-in">
+          <div className="active-glow-card rounded-3xl p-4 space-y-3.5 shadow-2xl animate-in fade-in">
             {/* Inspector Header */}
-            <div className="flex items-center justify-between border-b border-[#27272c] pb-2">
+            <div className="flex items-center justify-between pb-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="p-1 rounded-md bg-[#222226] flex items-center justify-center">
+                  <div className="p-1 rounded-full bg-white/[0.08] flex items-center justify-center">
                     {getLayerIcon(selectedLayer.type)}
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#222226] text-[#f2f2f3]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/[0.08] text-[#f2f2f3]">
                     {selectedLayer.name}
                   </span>
                   <span className="text-xs font-semibold text-[#f2f2f3] truncate">
@@ -158,7 +158,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                 type="button"
                 aria-label="Hapus klip ini"
                 onClick={() => onDeleteClip(selectedLayer.id, selectedClip.id)}
-                className="tap w-8 h-8 rounded-full flex items-center justify-center text-[#76767f] hover:text-red-400 hover:bg-[#222226] transition-colors"
+                className="tap w-8 h-8 rounded-full flex items-center justify-center text-[#76767f] hover:text-red-400 hover:bg-white/[0.08] transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -177,7 +177,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                     dir="ltr"
                     value={editingText}
                     onChange={(e) => handleTextChange(e.target.value)}
-                    className="w-full bg-[#222226] border border-[#303036] rounded-xl px-3 py-1.5 text-xs text-[#f2f2f3] focus:outline-hidden focus:border-[#e5484d] text-left [direction:ltr] select-text"
+                    className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-full px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-[#e5484d] text-left [direction:ltr] select-text shadow-inner"
                     placeholder="Ketik teks yang ingin dimunculkan..."
                   />
                 </div>
@@ -205,7 +205,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                     <select
                       value={selectedClip.props?.animation || 'slide-up'}
                       onChange={(e) => handleAnimationChange(e.target.value as any)}
-                      className="w-full bg-[#222226] border border-[#303036] rounded-xl px-2.5 py-1 text-xs text-[#f2f2f3] focus:outline-hidden"
+                      className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-full px-3 py-1.5 text-xs text-[#f2f2f3] focus:outline-hidden"
                     >
                       <option value="slide-up">Slide Up</option>
                       <option value="zoom">Zoom</option>
@@ -283,7 +283,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                         })
                       }
                       style={{ background: grad.val }}
-                      className="tap p-2.5 rounded-xl border border-[#303036] text-left text-xs font-semibold text-white shadow-sm hover:border-[#e5484d] transition-colors"
+                      className="tap p-2.5 rounded-full text-center text-xs font-semibold text-white shadow-sm hover:scale-[1.02] transition-transform"
                     >
                       {grad.name}
                     </button>
@@ -328,18 +328,18 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                       text: e.target.value,
                     })
                   }
-                  className="w-full bg-[#222226] border border-[#303036] rounded-xl px-3 py-1.5 text-xs text-[#f2f2f3] focus:outline-hidden focus:border-[#5fd3b0] resize-none"
+                  className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-2xl px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-[#5fd3b0] resize-none shadow-inner"
                   placeholder="Ketik teks narasi..."
                 />
               </div>
             )}
 
             {/* Universal Timing & Duration Controls for Selected Clip */}
-            <div className="pt-2.5 border-t border-[#27272c] space-y-2.5">
+            <div className="pt-2 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold text-[#8b8b94] uppercase tracking-wider flex items-center gap-1">
                   <Clock className="w-3 h-3 text-[#e5484d]" />
-                  <span>Pengaturan Timing & Posisi Muncul</span>
+                  <span>Pengaturan Timing & Posisi</span>
                 </span>
                 <button
                   type="button"
@@ -348,7 +348,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                       onUpdateClipTiming(selectedLayer.id, selectedClip.id, currentFrame, selectedClip.duration);
                     }
                   }}
-                  className="tap text-[10px] text-[#e5484d] hover:text-[#f87171] font-medium bg-[#e5484d]/10 px-2 py-0.5 rounded-full border border-[#e5484d]/30"
+                  className="tap text-[10px] text-[#e5484d] hover:text-[#f87171] font-medium bg-gradient-to-r from-[#e5484d]/20 to-[#e5484d]/10 px-3 py-1 rounded-full shadow-xs"
                   title="Pindahkan titik mulai klip ini ke posisi playhead saat ini"
                 >
                   Tempel ke Playhead ({((currentFrame) / timeline.fps).toFixed(1)}s)
@@ -401,7 +401,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-[#18181b]/50 border border-dashed border-[#27272c] rounded-2xl p-4 text-center select-none">
+          <div className="bg-gradient-to-b from-[#18181c]/70 to-[#121215]/70 rounded-3xl p-5 text-center select-none shadow-md">
             <SlidersHorizontal className="w-5 h-5 text-[#8b8b94] mx-auto mb-1.5" />
             <p className="text-xs font-semibold text-[#f2f2f3]">Pilih Klip di Timeline</p>
             <p className="text-[11px] text-[#8b8b94] mt-0.5">
@@ -410,8 +410,8 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
           </div>
         )}
 
-        {/* Quick Tips */}
-        <div className="p-3 bg-[#121214] rounded-2xl border border-[#27272c] text-[11px] text-[#8b8b94] space-y-1 leading-relaxed">
+        {/* Quick Tips (Subtle gradient, zero borders) */}
+        <div className="p-3.5 bg-gradient-to-b from-[#18181c] to-[#121215] rounded-3xl text-[11px] text-[#8b8b94] space-y-1 leading-relaxed shadow-sm">
           <p className="font-semibold text-[#f2f2f3]">💡 Tips Timeline:</p>
           <p>• Geser jari di track timeline untuk memutar video ke titik tertentu (scrubbing).</p>
           <p>• Perubahan klip tersimpan otomatis dan langsung diperbarui di player atas.</p>

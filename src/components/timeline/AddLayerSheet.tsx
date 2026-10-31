@@ -81,10 +81,10 @@ export const AddLayerSheet: React.FC<AddLayerSheetProps> = ({
               key={opt.type}
               type="button"
               onClick={() => setSelectedType(opt.type)}
-              className={`tap w-full p-3 rounded-2xl border text-left flex items-start gap-3 transition-colors ${
+              className={`tap w-full p-3.5 rounded-2xl text-left flex items-start gap-3 transition-all ${
                 selectedType === opt.type
-                  ? `${opt.color} border-[#e5484d]`
-                  : 'bg-[#18181b] border-[#27272c] hover:border-[#303036]'
+                  ? 'active-glow-card shadow-lg'
+                  : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-[#8b8b94] hover:from-[#202025]'
               }`}
             >
               <div className="p-2 rounded-xl bg-[#222226] shrink-0 mt-0.5">
@@ -99,7 +99,7 @@ export const AddLayerSheet: React.FC<AddLayerSheetProps> = ({
                 </p>
               </div>
               {selectedType === opt.type && (
-                <span className="w-2.5 h-2.5 rounded-full bg-[#e5484d] shrink-0 mt-1" />
+                <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-red-500 to-rose-500 shrink-0 mt-1 shadow-xs" />
               )}
             </button>
           ))}
@@ -116,7 +116,7 @@ export const AddLayerSheet: React.FC<AddLayerSheetProps> = ({
             value={layerName}
             onChange={(e) => setLayerName(e.target.value)}
             placeholder="Contoh: Subtitle Utama, Hook Teks, Sound FX"
-            className="w-full bg-[#222226] border border-[#303036] rounded-full px-4 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:border-[#e5484d] text-left [direction:ltr] select-text"
+            className="w-full bg-gradient-to-r from-[#18181c] to-[#121215] ring-1 ring-white/10 focus:ring-2 focus:ring-red-500/50 rounded-full px-4 py-2.5 text-xs text-[#f2f2f3] focus:outline-hidden text-left [direction:ltr] select-text shadow-inner transition-all"
           />
         </div>
 

@@ -90,15 +90,15 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
       subtitle="Deteksi otomatis AI coding agent, protokol ACP, dan kesiapan hardware ARM64"
     >
       <div className="space-y-4 text-xs select-none">
-        {/* Navigation Switcher Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-[#141419] rounded-xl border border-[#252530]">
+        {/* Navigation Switcher Tabs (Standalone Pill Buttons tanpa container background & border) */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab('agents')}
-            className={`tap flex-1 py-1.5 px-3 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-colors ${
+            className={`tap flex-1 py-2 px-3 rounded-full font-semibold flex items-center justify-center gap-1.5 transition-all min-h-[36px] ${
               activeTab === 'agents'
-                ? 'bg-[#c92a2a] text-white shadow-sm'
-                : 'text-[#888898] hover:text-white'
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-md shadow-red-950/40'
+                : 'bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-[#888898] hover:text-white'
             }`}
           >
             <Bot className="w-3.5 h-3.5" />
@@ -108,14 +108,14 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('diagnostics')}
-            className={`tap flex-1 py-1.5 px-3 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-colors ${
+            className={`tap flex-1 py-2 px-3 rounded-full font-semibold flex items-center justify-center gap-1.5 transition-all min-h-[36px] ${
               activeTab === 'diagnostics'
-                ? 'bg-[#c92a2a] text-white shadow-sm'
-                : 'text-[#888898] hover:text-white'
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-md shadow-red-950/40'
+                : 'bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-[#888898] hover:text-white'
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>Diagnostik ARM64 & OS</span>
+            <span>Diagnostik ARM64</span>
             {diagnostics && diagnostics.readinessScore === 'warning' && (
               <span className="w-2 h-2 rounded-full bg-amber-400" />
             )}
@@ -126,7 +126,7 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
             onClick={fetchStatus}
             disabled={loading}
             title="Muat Ulang Status"
-            className="tap p-2 rounded-lg text-[#888898] hover:text-white hover:bg-[#202028] transition-colors"
+            className="tap w-9 h-9 rounded-full bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-[#888898] hover:text-white flex items-center justify-center transition-colors shrink-0 shadow-xs"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#e5484d]' : ''}`} />
           </button>
@@ -135,14 +135,14 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
         {/* Tab 1: AI Coding Agents Discovery */}
         {activeTab === 'agents' && (
           <div className="space-y-3">
-            <div className="p-3 bg-[#131317] rounded-xl border border-[#22222a] flex items-start gap-2.5">
+            <div className="p-3.5 bg-gradient-to-b from-[#18181c] to-[#111114] rounded-2xl flex items-start gap-2.5 shadow-sm">
               <Info className="w-4 h-4 text-[#e5484d] shrink-0 mt-0.5" />
               <p className="text-[11px] text-[#9090a0] leading-relaxed">
                 Males Ngonten Studio berkomunikasi dengan coding agent lokal melalui protokol ACP (Agent Client Protocol) atau CLI langsung. Agen yang aktif akan menerima perintah untuk mengubah kode dan timeline video.
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {agents.map((agent) => {
                 const isSelected = selectedAgentId === agent.id;
                 const isReady = agent.status === 'ready';
@@ -151,19 +151,19 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                   <div
                     key={agent.id}
                     onClick={() => handleSelectAgent(agent)}
-                    className={`tap p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`tap p-3.5 rounded-3xl transition-all cursor-pointer relative ${
                       isSelected
-                        ? 'bg-[#1a1416] border-[#e5484d] shadow-sm'
-                        : 'bg-[#121216] border-[#22222a] hover:border-[#30303a]'
+                        ? 'active-glow-card'
+                        : 'bg-gradient-to-b from-[#18181c] to-[#111114] shadow-md hover:from-[#202026] hover:to-[#141418]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-[#c92a2a] text-white'
-                              : 'bg-[#202028] text-[#8e8e9e]'
+                              ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-xs'
+                              : 'bg-gradient-to-b from-[#25252d] to-[#1b1b22] text-[#8e8e9e]'
                           }`}
                         >
                           <Bot className="w-4 h-4" />
@@ -174,7 +174,7 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                               {agent.name}
                             </span>
                             {isSelected && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-950 text-red-300 font-mono border border-red-800/40">
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-mono font-bold shadow-xs">
                                 AKTIF
                               </span>
                             )}
@@ -188,12 +188,12 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                       {/* Status badge */}
                       <div>
                         {isReady ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.5 rounded-full font-mono">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-300 bg-gradient-to-r from-emerald-950/80 to-teal-950/80 px-2.5 py-0.5 rounded-full font-mono shadow-xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                             Ready {agent.latencyMs ? `(${agent.latencyMs}ms)` : ''}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-[#7a7a8a] bg-[#1e1e24] px-2 py-0.5 rounded-full font-mono">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-[#7a7a8a] bg-[#1a1a20] px-2.5 py-0.5 rounded-full font-mono">
                             Tidak Terpasang
                           </span>
                         )}
@@ -204,16 +204,16 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                       {agent.description}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 border-t border-white/5 text-[10px]">
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 text-[10px]">
                       <span className="text-[#656575]">Protokol:</span>
-                      <span className="px-1.5 py-0.5 rounded bg-[#1e1e26] text-[#b0b0c0] font-mono uppercase">
+                      <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#202028] to-[#181820] text-[#b0b0c0] font-mono uppercase">
                         {agent.protocol}
                       </span>
                       <span className="text-[#656575] ml-2">Tools:</span>
                       {agent.supportedTools.slice(0, 3).map((t) => (
                         <span
                           key={t}
-                          className="px-1.5 py-0.5 rounded bg-[#181820] text-[#7e7e8e] font-mono"
+                          className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#202028] to-[#181820] text-[#7e7e8e] font-mono"
                         >
                           {t}
                         </span>

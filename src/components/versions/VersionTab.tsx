@@ -47,7 +47,7 @@ export const VersionTab: React.FC<VersionTabProps> = ({
         />
       ) : (
         /* Timeline vertikal (titik + garis) */
-        <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-[2px] before:bg-[#27272c]">
+        <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-[2px] before:bg-gradient-to-b before:from-red-500/40 before:via-purple-500/25 before:to-transparent">
           {versions.map((ver, idx) => {
             const isLatest = idx === 0;
             const isActive = ver.isActive || isLatest;
@@ -56,24 +56,26 @@ export const VersionTab: React.FC<VersionTabProps> = ({
               <div key={ver.hash} className="relative group">
                 {/* Node Dot */}
                 <div
-                  className={`absolute -left-[20px] top-1.5 w-3.5 h-3.5 rounded-full border-2 transition-colors ${
+                  className={`absolute -left-[20px] top-1.5 w-3.5 h-3.5 rounded-full transition-all ${
                     isActive
-                      ? 'bg-[#e5484d] border-[#121214] ring-4 ring-[#e5484d]/20'
-                      : 'bg-[#222226] border-[#303036]'
+                      ? 'bg-[#e5484d] ring-4 ring-[#e5484d]/30 shadow-md'
+                      : 'bg-gradient-to-b from-[#2a2a32] to-[#1c1c22]'
                   }`}
                 />
 
                 {/* Version Card */}
                 <div
-                  className={`bg-[#18181b] border rounded-2xl p-3.5 transition-colors ${
-                    isActive ? 'border-[#e5484d]/50 bg-[#1c1416]/50' : 'border-[#27272c]'
+                  className={`rounded-2xl p-3.5 transition-all ${
+                    isActive
+                      ? 'active-glow-card shadow-xl'
+                      : 'bg-gradient-to-b from-[#18181c] to-[#111114] shadow-md hover:from-[#202026]'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         {isActive && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#e5484d] text-white">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-xs">
                             Aktif
                           </span>
                         )}
@@ -94,7 +96,7 @@ export const VersionTab: React.FC<VersionTabProps> = ({
 
                   {/* Actions for older versions */}
                   {!isActive && (
-                    <div className="flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-[#27272c]">
+                    <div className="flex items-center justify-end gap-2 mt-3 pt-1">
                       <PillButton
                         variant="outline"
                         size="xs"
@@ -129,7 +131,7 @@ export const VersionTab: React.FC<VersionTabProps> = ({
         subtitle="Proses ini non-destruktif dan akan membuat checkpoint baru."
       >
         <div className="space-y-4">
-          <div className="p-3 bg-[#18181b] rounded-xl border border-[#27272c] space-y-1">
+          <div className="p-3.5 bg-gradient-to-br from-[#18181c] to-[#121215] rounded-2xl space-y-1 shadow-sm">
             <span className="text-xs font-mono text-[#7aa7ff]">
               #{pendingRestoreVersion?.shortHash}
             </span>

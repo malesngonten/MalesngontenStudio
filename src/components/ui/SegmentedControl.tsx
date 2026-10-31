@@ -24,7 +24,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       role="tablist"
-      className={`inline-flex items-center bg-[#222226] p-1 rounded-full border border-[#303036] select-none ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center gap-1.5 select-none ${fullWidth ? 'w-full' : ''} ${className}`}
     >
       {options.map((option) => {
         const isSelected = option.value === value;
@@ -37,8 +37,8 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(option.value)}
             className={`tap relative flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-full transition-all min-h-[36px] ${
               isSelected
-                ? 'bg-[#e5484d] text-white shadow-sm'
-                : 'text-[#8b8b94] hover:text-[#f2f2f3]'
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-md shadow-red-950/40'
+                : 'bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-[#8b8b94] hover:text-[#f2f2f3] hover:from-[#2a2a32] hover:to-[#202026]'
             }`}
           >
             {option.icon && <span className="w-3.5 h-3.5 shrink-0">{option.icon}</span>}

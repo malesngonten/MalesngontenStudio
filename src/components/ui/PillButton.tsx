@@ -27,12 +27,12 @@ export const PillButton: React.FC<PillButtonProps> = ({
 
   const variantClasses = {
     outline: active
-      ? 'border border-[#e5484d] bg-[#3b2427]/40 text-[#f2f2f3]'
-      : 'border border-[#303036] bg-[#18181b] hover:border-[#45454d] text-[#8b8b94] hover:text-[#f2f2f3]',
+      ? 'bg-gradient-to-r from-red-600/35 to-rose-600/25 text-[#f2f2f3] shadow-xs'
+      : 'bg-gradient-to-b from-white/[0.08] to-white/[0.03] text-[#8b8b94] hover:text-[#f2f2f3] hover:from-white/[0.12] hover:to-white/[0.05]',
     filled: active
-      ? 'bg-[#e5484d] text-white font-medium'
-      : 'bg-[#222226] text-[#8b8b94] hover:text-[#f2f2f3] hover:bg-[#2c2c31]',
-    red: 'border border-[#e5484d]/60 bg-[#3b2427]/30 text-[#e5484d] hover:bg-[#3b2427]/50 active:scale-95',
+      ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white font-medium shadow-md shadow-red-950/40'
+      : 'bg-gradient-to-b from-[#28282e] to-[#1e1e24] text-[#8b8b94] hover:text-[#f2f2f3] hover:from-[#303038] hover:to-[#222228]',
+    red: 'bg-gradient-to-r from-red-600/30 via-rose-600/25 to-red-600/20 text-[#ff6369] hover:from-red-600/40 hover:to-rose-600/30 active:scale-95 shadow-xs',
   };
 
   return (

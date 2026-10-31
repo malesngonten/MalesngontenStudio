@@ -6,8 +6,20 @@ import fs from 'fs';
 import os from 'os';
 import { spawnSync, spawn, ChildProcess } from 'child_process';
 import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
+
+const geminiApiKey = process.env.GEMINI_API_KEY;
+let geminiClient: GoogleGenAI | null = null;
+if (geminiApiKey) {
+  try {
+    geminiClient = new GoogleGenAI();
+    console.log('[Gemini SDK] Initialized GoogleGenAI with API key');
+  } catch (err) {
+    console.warn('[Gemini SDK] Failed to initialize GoogleGenAI client:', err);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -404,14 +416,16 @@ function discoverLocalAgents() {
     },
     {
       id: 'agent-gemini',
-      name: 'Gemini CLI Agent (Google)',
-      command: 'gemini',
-      protocol: 'cli',
-      version: geminiCheck.version,
-      status: geminiCheck.exists ? 'ready' : 'not_found',
-      description: 'Google Gemini CLI agent untuk optimasi dan penyusunan prompt video.',
-      supportedTools: ['readFile', 'writeFile', 'generateCode'],
-      latencyMs: geminiCheck.exists ? 60 : undefined,
+      name: 'Gemini Agent (Google GenAI)',
+      command: 'gemini-2.5-flash',
+      protocol: 'api',
+      version: geminiApiKey ? 'gemini-2.5-flash' : geminiCheck.version,
+      status: geminiApiKey || geminiCheck.exists ? 'ready' : 'not_found',
+      description: geminiApiKey
+        ? 'Google Gemini 2.5 Flash aktif via server-side SDK untuk pembuatan dan optimasi timeline video otonom.'
+        : 'Google Gemini agent untuk penyusunan dan pengeditan video. Aktifkan dengan menyetel GEMINI_API_KEY.',
+      supportedTools: ['readFile', 'writeFile', 'modifyTimeline', 'generateCreativePlan'],
+      latencyMs: geminiApiKey ? 110 : (geminiCheck.exists ? 60 : undefined),
       isSelected: selectedAgentId === 'agent-gemini',
     },
     {
@@ -671,53 +685,94 @@ app.post('/api/agent/prompt', async (req, res) => {
       let modificationSummary = '';
       let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
 
-      if (promptLower.includes('subtitle') || promptLower.includes('caption') || promptLower.includes('teks')) {
-        const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-        if (textLayer) {
-          const newClip = {
-            id: 'clip-t-' + Date.now(),
-            name: 'Caption Dinamis',
-            from: 20,
-            duration: 80,
-            props: {
-              text: promptLower.includes('caption') ? '🔥 RAHASIA KONTEN VIRAL 2026' : '⚡ Konten Video Otomatis!',
-              fontSize: 42,
-              color: '#5fd3b0',
-              y: 46,
-              x: 50,
-              animation: 'bounce',
+      if (geminiClient && text) {
+        try {
+          const aiResponse = await geminiClient.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
+The user wants to modify their Remotion video project.
+
+Current timeline JSON:
+${JSON.stringify(currentTimelineData, null, 2)}
+
+User request:
+"${text}"
+
+Project Rules:
+${DEFAULT_GEMINI_RULES}
+
+Modify the timeline accordingly (layers, clips, texts, animations, audio).
+Return ONLY valid JSON matching this schema:
+{
+  "summary": "Short explanation in Indonesian of what was changed (1-2 sentences)",
+  "timeline": <complete updated timeline object matching the input structure>
+}`,
+            config: {
+              responseMimeType: 'application/json',
             },
-          };
-          textLayer.clips.push(newClip);
-          modificationSummary = 'Menambahkan klip teks animasi baru dengan efek bounce dan warna hijau neon.';
+          });
+
+          if (aiResponse.text) {
+            const parsed = JSON.parse(aiResponse.text.trim());
+            if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
+              updatedTimeline = parsed.timeline;
+              modificationSummary = parsed.summary || 'Memperbarui timeline video sesuai instruksi AI.';
+            }
+          }
+        } catch (geminiErr: any) {
+          console.warn('[Gemini API] Failed to run generative edit, falling back to local engine:', geminiErr?.message || geminiErr);
         }
-      } else if (promptLower.includes('musik') || promptLower.includes('lagu') || promptLower.includes('audio')) {
-        const musicLayer = updatedTimeline.layers.find((l: any) => l.type === 'music');
-        if (musicLayer) {
-          musicLayer.clips = [
-            {
-              id: 'clip-m-' + Date.now(),
-              name: 'Cinematic Lo-Fi Pulse (Updated)',
-              from: 0,
-              duration: updatedTimeline.durationInFrames,
-              props: { volume: 0.95 },
-            },
-          ];
-          modificationSummary = 'Mengganti track musik latar dengan Cinematic Lo-Fi Pulse.';
-        }
-      } else if (promptLower.includes('zoom') || promptLower.includes('animasi') || promptLower.includes('gerak')) {
-        const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-        if (textLayer && textLayer.clips.length > 0) {
-          textLayer.clips[0].props.animation = 'zoom';
-          textLayer.clips[0].props.fontSize = 50;
-          modificationSummary = 'Mengubah animasi teks headline utama menjadi efek Zoom 3D dinamis.';
-        }
-      } else {
-        // General creative enhancement
-        const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-        if (textLayer && textLayer.clips.length > 0) {
-          textLayer.clips[0].props.text = text.length < 35 ? text : text.slice(0, 35) + '...';
-          modificationSummary = `Memperbarui teks utama sesuai instruksi: "${text.slice(0, 30)}..."`;
+      }
+
+      if (!modificationSummary) {
+        if (promptLower.includes('subtitle') || promptLower.includes('caption') || promptLower.includes('teks')) {
+          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
+          if (textLayer) {
+            const newClip = {
+              id: 'clip-t-' + Date.now(),
+              name: 'Caption Dinamis',
+              from: 20,
+              duration: 80,
+              props: {
+                text: promptLower.includes('caption') ? '🔥 RAHASIA KONTEN VIRAL 2026' : '⚡ Konten Video Otomatis!',
+                fontSize: 42,
+                color: '#5fd3b0',
+                y: 46,
+                x: 50,
+                animation: 'bounce',
+              },
+            };
+            textLayer.clips.push(newClip);
+            modificationSummary = 'Menambahkan klip teks animasi baru dengan efek bounce dan warna hijau neon.';
+          }
+        } else if (promptLower.includes('musik') || promptLower.includes('lagu') || promptLower.includes('audio')) {
+          const musicLayer = updatedTimeline.layers.find((l: any) => l.type === 'music');
+          if (musicLayer) {
+            musicLayer.clips = [
+              {
+                id: 'clip-m-' + Date.now(),
+                name: 'Cinematic Lo-Fi Pulse (Updated)',
+                from: 0,
+                duration: updatedTimeline.durationInFrames,
+                props: { volume: 0.95 },
+              },
+            ];
+            modificationSummary = 'Mengganti track musik latar dengan Cinematic Lo-Fi Pulse.';
+          }
+        } else if (promptLower.includes('zoom') || promptLower.includes('animasi') || promptLower.includes('gerak')) {
+          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
+          if (textLayer && textLayer.clips.length > 0) {
+            textLayer.clips[0].props.animation = 'zoom';
+            textLayer.clips[0].props.fontSize = 50;
+            modificationSummary = 'Mengubah animasi teks headline utama menjadi efek Zoom 3D dinamis.';
+          }
+        } else {
+          // General creative enhancement
+          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
+          if (textLayer && textLayer.clips.length > 0) {
+            textLayer.clips[0].props.text = text.length < 35 ? text : text.slice(0, 35) + '...';
+            modificationSummary = `Memperbarui teks utama sesuai instruksi: "${text.slice(0, 30)}..."`;
+          }
         }
       }
 

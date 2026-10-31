@@ -36,14 +36,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
 
       {/* Sheet content */}
-      <div className="relative w-full max-w-[480px] max-h-[85vh] bg-[#121214] border-t border-[#27272c] rounded-t-3xl shadow-2xl flex flex-col z-10 animate-in slide-in-from-bottom duration-200">
+      <div className="relative w-full max-w-[480px] max-h-[85vh] bg-gradient-to-b from-[#18181c] to-[#0f0f12] rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.8)] flex flex-col z-10 animate-in slide-in-from-bottom duration-200">
         {/* Drag handle */}
         <div className="w-full flex justify-center pt-2.5 pb-1">
-          <div className="w-10 h-1 bg-[#303036] rounded-full" />
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[#27272c]">
+        {/* Header with subtle gradient separator */}
+        <div className="flex items-center justify-between px-4 py-2 relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent">
           <div>
             <h3 className="text-sm font-semibold text-[#f2f2f3]">{title}</h3>
             {subtitle && <p className="text-[11px] text-[#8b8b94]">{subtitle}</p>}

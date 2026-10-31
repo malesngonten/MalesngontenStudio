@@ -83,8 +83,8 @@ export const AssetTab: React.FC<AssetTabProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-[#0e0e10] p-4 overflow-y-auto space-y-4 select-none safe-pb">
-      {/* 5.2 Meter Storage */}
-      <div className="bg-[#18181b] border border-[#27272c] rounded-2xl p-3.5 space-y-2">
+      {/* 5.2 Meter Storage (Tanpa border, gradasi lembut) */}
+      <div className="bg-gradient-to-b from-[#18181c] to-[#111114] rounded-3xl p-4 space-y-2 shadow-lg">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-[#f2f2f3] font-semibold">
             <HardDrive className="w-4 h-4 text-[#8b8b94]" />
@@ -109,17 +109,17 @@ export const AssetTab: React.FC<AssetTabProps> = ({
         )}
       </div>
 
-      {/* Upload Dropzone */}
+      {/* Upload Dropzone (Gradasi lembut tanpa hard border) */}
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 ${
+        className={`rounded-3xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 shadow-md ${
           isDragActive
-            ? 'border-[#e5484d] bg-[#3b2427]/20'
-            : 'border-[#303036] hover:border-[#45454d] bg-[#121214]'
+            ? 'active-glow-card'
+            : 'bg-gradient-to-b from-[#18181c] to-[#111114] hover:from-[#202026] hover:to-[#141418]'
         }`}
       >
         <input {...getInputProps()} />
-        <div className="w-10 h-10 rounded-full bg-[#222226] flex items-center justify-center text-[#e5484d]">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600/30 to-rose-600/20 flex items-center justify-center text-[#e5484d] shadow-xs">
           <Upload className="w-5 h-5" />
         </div>
         <div>
@@ -161,14 +161,14 @@ export const AssetTab: React.FC<AssetTabProps> = ({
           description="Unggah file media atau lampirkan di chat agar AI agent dapat menggunakannya dalam video."
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {filteredAssets.map((asset) => (
             <div
               key={asset.id}
-              className="bg-[#18181b] border border-[#27272c] rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-[#303036] transition-colors"
+              className="bg-gradient-to-b from-[#18181c] to-[#111114] rounded-3xl p-3.5 flex items-center justify-between gap-3 shadow-md hover:from-[#202026] hover:to-[#141418] transition-all"
             >
               {/* Icon badge */}
-              <div className="w-10 h-10 rounded-xl bg-[#222226] flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-b from-[#24242a] to-[#1a1a20] flex items-center justify-center shrink-0 shadow-xs">
                 {getAssetIcon(asset.type)}
               </div>
 

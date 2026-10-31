@@ -54,13 +54,13 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#0a0a0b] text-[#f2f2f3] overflow-hidden select-none">
       {/* File Selector & Status Header */}
-      <div className="px-3 py-2 bg-[#121214] border-b border-[#27272c] flex items-center justify-between gap-2 relative">
+      <div className="px-3 py-2 bg-gradient-to-b from-[#141418] to-[#0e0e11] flex items-center justify-between gap-2 relative after:absolute after:bottom-0 after:left-3 after:right-3 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent">
         {/* Dropdown file selector */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#18181b] hover:bg-[#222226] border border-[#27272c] text-xs font-mono font-medium text-[#f2f2f3] transition-colors"
+            className="tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#202026] to-[#16161a] hover:from-[#26262e] hover:to-[#1c1c22] text-xs font-mono font-medium text-[#f2f2f3] transition-all shadow-sm"
           >
             <FileCode className="w-3.5 h-3.5 text-[#7aa7ff]" />
             <span>{activeFile}</span>
@@ -68,7 +68,7 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 w-52 bg-[#18181b] border border-[#303036] rounded-xl shadow-2xl py-1 z-30 font-mono text-xs">
+            <div className="absolute top-full left-0 mt-1.5 w-52 bg-gradient-to-b from-[#1a1a1e] to-[#121215] rounded-2xl shadow-2xl py-1.5 z-30 font-mono text-xs ring-1 ring-white/10 overflow-hidden">
               {Object.keys(files).map((fileName) => (
                 <button
                   key={fileName}
@@ -77,7 +77,7 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
                     onSelectFile(fileName);
                     setIsDropdownOpen(false);
                   }}
-                  className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#222226] transition-colors ${
+                  className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-white/5 transition-colors ${
                     fileName === activeFile ? 'text-[#e5484d] font-semibold' : 'text-[#8b8b94]'
                   }`}
                 >
@@ -141,14 +141,14 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
       </div>
 
       {/* Baris tombol simbol di atas keyboard ({ } ( ) < > ; = Tab) */}
-      <div className="px-2 py-1.5 bg-[#121214] border-t border-[#27272c] overflow-x-auto flex items-center gap-1.5 no-scrollbar select-none">
+      <div className="px-3 py-2 bg-gradient-to-t from-[#141418] to-[#0e0e11] overflow-x-auto flex items-center gap-1.5 no-scrollbar select-none relative before:absolute before:top-0 before:left-3 before:right-3 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent">
         {SYMBOL_KEYS.map((sym) => (
           <button
             key={sym}
             type="button"
             onClick={() => insertSymbol(sym)}
             disabled={isAgentEditingFile}
-            className="tap min-w-[34px] h-[32px] px-2 rounded-lg bg-[#222226] hover:bg-[#2c2c31] border border-[#303036] text-xs font-mono font-semibold text-[#f2f2f3] active:scale-95 transition-all flex items-center justify-center shrink-0 disabled:opacity-40"
+            className="tap min-w-[34px] h-[32px] px-3 rounded-full bg-gradient-to-b from-[#222226] to-[#18181b] hover:from-[#2a2a30] hover:to-[#202025] text-xs font-mono font-semibold text-[#f2f2f3] active:scale-95 transition-all flex items-center justify-center shrink-0 disabled:opacity-40 shadow-xs"
           >
             {sym}
           </button>

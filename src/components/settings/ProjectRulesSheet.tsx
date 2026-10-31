@@ -45,7 +45,7 @@ export const ProjectRulesSheet: React.FC<ProjectRulesSheetProps> = ({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={12}
-          className="w-full bg-[#0a0a0b] text-[#f2f2f3] font-code text-xs p-3 rounded-2xl border border-[#27272c] focus:outline-hidden focus:border-[#e5484d] resize-none select-text leading-relaxed"
+          className="w-full bg-gradient-to-b from-[#0e0e11] to-[#08080a] text-[#f2f2f3] font-code text-xs p-3.5 rounded-2xl ring-1 ring-white/10 focus:outline-hidden focus:ring-2 focus:ring-red-500/50 resize-none select-text leading-relaxed shadow-inner"
           placeholder="Isi instruksi GEMINI.md..."
         />
 

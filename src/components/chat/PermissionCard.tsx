@@ -16,9 +16,15 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   const isResolved = permission.status !== 'pending';
 
   return (
-    <div className="my-2.5 bg-[#18181b] border border-[#e5484d]/40 rounded-2xl p-3.5 shadow-lg select-none">
+    <div
+      className={`my-2.5 rounded-2xl p-3.5 shadow-lg select-none transition-all ${
+        !isResolved
+          ? 'active-glow-card shadow-xl'
+          : 'bg-gradient-to-br from-[#18181c] to-[#121215]'
+      }`}
+    >
       <div className="flex items-start gap-2.5 mb-2.5">
-        <div className="p-2 rounded-xl bg-[#e5484d]/15 text-[#e5484d] shrink-0">
+        <div className="p-2 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/20 text-[#e5484d] shrink-0">
           <ShieldAlert className="w-4 h-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -27,10 +33,10 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               Persetujuan Diperlukan
             </span>
             <span
-              className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+              className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                 isDangerous
-                  ? 'bg-red-500/20 text-red-400'
-                  : 'bg-amber-500/20 text-amber-400'
+                  ? 'bg-gradient-to-r from-red-500/25 to-rose-500/20 text-red-400'
+                  : 'bg-gradient-to-r from-amber-500/25 to-orange-500/20 text-amber-400'
               }`}
             >
               {permission.riskLevel}
@@ -39,7 +45,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           <p className="text-xs text-[#8b8b94] mt-0.5 leading-relaxed">
             {permission.reason}
           </p>
-          <div className="mt-1.5 bg-[#0a0a0b] px-2.5 py-1 rounded-lg border border-[#27272c] font-code text-[11px] text-[#7aa7ff] truncate">
+          <div className="mt-2 bg-gradient-to-r from-[#0c0c0e] to-[#08080a] px-3 py-1.5 rounded-full font-code text-[11px] text-[#7aa7ff] truncate shadow-inner">
             {permission.action}: {permission.target}
           </div>
         </div>
@@ -47,7 +53,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
 
       {/* Decision buttons */}
       {!isResolved ? (
-        <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-[#27272c]">
+        <div className="flex items-center justify-end gap-1.5 pt-2 relative after:absolute after:top-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent">
           <PillButton
             variant="outline"
             size="xs"

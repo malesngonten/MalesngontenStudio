@@ -30,30 +30,30 @@ export const ChatHistorySheet: React.FC<ChatHistorySheetProps> = ({
       subtitle="Sesi proyek video & perintah ACP tersimpan di perangkat lokal"
     >
       <div className="space-y-3">
-        {/* New chat button */}
+        {/* New chat button (Kapsul rounded-full) */}
         <button
           type="button"
           onClick={() => {
             onNewChat();
             onClose();
           }}
-          className="tap w-full py-2.5 px-4 rounded-xl bg-[#c92a2a] hover:bg-[#b02525] text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+          className="tap w-full py-2.5 px-4 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-red-950/40 min-h-[40px]"
         >
           <Plus className="w-4 h-4" />
           <span>Mulai Obrolan / Proyek Baru</span>
         </button>
 
         {/* Sessions list */}
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
+        <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-0.5">
           {sessions.map((session) => {
             const isActive = session.id === activeSessionId;
             return (
               <div
                 key={session.id}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                className={`flex items-center justify-between p-3.5 rounded-2xl transition-all ${
                   isActive
-                    ? 'bg-[#1e1416] border-[#e5484d] text-white'
-                    : 'bg-[#15151a] border-[#25252e] text-[#8e8e9c] hover:border-[#33333d]'
+                    ? 'active-glow-card shadow-xl'
+                    : 'bg-gradient-to-b from-[#18181c] to-[#111114] text-[#8e8e9c] shadow-sm hover:from-[#202026]'
                 }`}
               >
                 <button
@@ -66,7 +66,7 @@ export const ChatHistorySheet: React.FC<ChatHistorySheetProps> = ({
                 >
                   <MessageSquare
                     className={`w-4 h-4 mt-0.5 shrink-0 ${
-                      isActive ? 'text-[#e5484d]' : 'text-[#8e8e9c]'
+                      isActive ? 'text-[#ff6369]' : 'text-[#8e8e9c]'
                     }`}
                   />
                   <div className="min-w-0">
@@ -84,7 +84,7 @@ export const ChatHistorySheet: React.FC<ChatHistorySheetProps> = ({
 
                 <div className="flex items-center gap-1 shrink-0 ml-2">
                   {isActive && (
-                    <span className="text-[10px] text-[#e5484d] font-bold px-2 py-0.5 rounded-full bg-[#3b171a] border border-red-900/50">
+                    <span className="text-[10px] text-white font-bold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 shadow-xs">
                       Aktif
                     </span>
                   )}
@@ -96,7 +96,7 @@ export const ChatHistorySheet: React.FC<ChatHistorySheetProps> = ({
                         e.stopPropagation();
                         onDeleteSession(session.id);
                       }}
-                      className="tap w-7 h-7 rounded-lg flex items-center justify-center text-[#717180] hover:text-red-400 hover:bg-[#202028]"
+                      className="tap w-7 h-7 rounded-full flex items-center justify-center text-[#717180] hover:text-red-400 hover:bg-white/[0.08] transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

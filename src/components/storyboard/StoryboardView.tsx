@@ -69,15 +69,15 @@ export const StoryboardView: React.FC<StoryboardViewProps> = ({
           </span>
         </div>
 
-        {/* Toggle between clean AI Storyboard Cards and Classic Track view (Kapsul Bulat) */}
-        <div className="flex items-center p-0.5 rounded-full bg-gradient-to-r from-zinc-900 to-zinc-800 text-[11px] shadow-sm">
+        {/* Toggle between clean AI Storyboard Cards and Classic Track view (Standalone Kapsul Bulat) */}
+        <div className="flex items-center gap-1.5 text-[11px]">
           <button
             type="button"
             onClick={() => setViewMode('cards')}
-            className={`tap px-3 py-1 rounded-full transition-all ${
+            className={`tap px-3.5 py-1.5 rounded-full transition-all min-h-[32px] ${
               viewMode === 'cards'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold shadow-xs'
-                : 'text-zinc-400 hover:text-white'
+                : 'bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-zinc-400 hover:text-white'
             }`}
           >
             Scene Cards
@@ -85,10 +85,10 @@ export const StoryboardView: React.FC<StoryboardViewProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('tracks')}
-            className={`tap px-3 py-1 rounded-full transition-all ${
+            className={`tap px-3.5 py-1.5 rounded-full transition-all min-h-[32px] ${
               viewMode === 'tracks'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold shadow-xs'
-                : 'text-zinc-400 hover:text-white'
+                : 'bg-gradient-to-b from-[#24242a] to-[#1a1a20] text-zinc-400 hover:text-white'
             }`}
           >
             Multi-Track
@@ -130,12 +130,10 @@ export const StoryboardView: React.FC<StoryboardViewProps> = ({
                     onSelectClip(clip, layer);
                     onSeek(clip.from);
                   }}
-                  className={`p-3.5 rounded-3xl transition-all cursor-pointer relative shadow-md ${
-                    isCurrent
-                      ? 'bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 ring-2 ring-red-500/60 shadow-red-950/40'
-                      : isSelected
-                      ? 'bg-gradient-to-r from-zinc-850 to-zinc-900 ring-1 ring-white/20'
-                      : 'bg-gradient-to-r from-zinc-900/60 to-zinc-900/40 hover:from-zinc-850/70 hover:to-zinc-850/50'
+                  className={`p-3.5 rounded-3xl transition-all cursor-pointer relative ${
+                    isCurrent || isSelected
+                      ? 'active-glow-card'
+                      : 'bg-gradient-to-b from-[#18181c] to-[#111114] shadow-md hover:from-[#202026] hover:to-[#141418]'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">

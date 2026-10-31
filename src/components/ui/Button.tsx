@@ -25,11 +25,11 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const variantClasses = {
-    primary: 'bg-[#e5484d] hover:bg-[#d93d42] text-white font-semibold shadow-sm',
-    secondary: 'bg-[#222226] hover:bg-[#2c2c31] text-[#f2f2f3] border border-[#303036]',
-    outline: 'bg-transparent border border-[#303036] hover:border-[#45454d] text-[#f2f2f3]',
-    ghost: 'bg-transparent hover:bg-[#222226] text-[#8b8b94] hover:text-[#f2f2f3]',
-    danger: 'bg-[#e5484d]/15 text-[#e5484d] border border-[#e5484d]/30 hover:bg-[#e5484d]/25',
+    primary: 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 text-white font-semibold shadow-md shadow-red-950/40',
+    secondary: 'bg-gradient-to-b from-[#28282f] to-[#1d1d23] hover:from-[#32323b] hover:to-[#24242c] text-[#f2f2f3] shadow-sm',
+    outline: 'bg-gradient-to-b from-white/[0.08] to-white/[0.03] hover:from-white/[0.12] hover:to-white/[0.06] text-[#f2f2f3] shadow-xs',
+    ghost: 'bg-transparent hover:bg-white/[0.07] text-[#8b8b94] hover:text-[#f2f2f3]',
+    danger: 'bg-gradient-to-r from-[#e5484d]/25 to-[#e5484d]/15 text-[#ff6369] hover:from-[#e5484d]/35 hover:to-[#e5484d]/20 shadow-xs',
   };
 
   return (

@@ -47,10 +47,10 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
                 key={model.id}
                 type="button"
                 onClick={() => onUpdateSettings({ model: model.id })}
-                className={`tap w-full p-3 rounded-2xl border text-left flex items-start justify-between transition-colors ${
+                className={`tap w-full p-3.5 rounded-2xl text-left flex items-start justify-between transition-all ${
                   settings.model === model.id
-                    ? 'bg-[#222226] border-[#e5484d] text-[#f2f2f3]'
-                    : 'bg-[#18181b] border-[#27272c] text-[#8b8b94] hover:border-[#303036]'
+                    ? 'active-glow-card shadow-lg'
+                    : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-[#8b8b94] hover:from-[#202025]'
                 }`}
               >
                 <div>
@@ -61,7 +61,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
                   <p className="text-[11px] text-[#8b8b94] mt-0.5">{model.desc}</p>
                 </div>
                 {settings.model === model.id && (
-                  <span className="w-2 h-2 rounded-full bg-[#e5484d] mt-1 shrink-0" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-red-500 to-rose-500 mt-1 shrink-0 shadow-xs" />
                 )}
               </button>
             ))}
@@ -77,10 +77,10 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
             <button
               type="button"
               onClick={() => onUpdateSettings({ permissionMode: 'ask' })}
-              className={`tap p-3 rounded-2xl border text-left transition-colors ${
+              className={`tap p-3.5 rounded-2xl text-left transition-all ${
                 settings.permissionMode === 'ask'
-                  ? 'bg-[#222226] border-[#e5484d] text-[#f2f2f3]'
-                  : 'bg-[#18181b] border-[#27272c] text-[#8b8b94]'
+                  ? 'active-glow-card shadow-lg'
+                  : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-[#8b8b94] hover:from-[#202025]'
               }`}
             >
               <ShieldCheck className="w-4 h-4 text-[#7aa7ff] mb-1" />
@@ -93,10 +93,10 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
             <button
               type="button"
               onClick={() => onUpdateSettings({ permissionMode: 'auto' })}
-              className={`tap p-3 rounded-2xl border text-left transition-colors ${
+              className={`tap p-3.5 rounded-2xl text-left transition-all ${
                 settings.permissionMode === 'auto'
-                  ? 'bg-[#222226] border-[#e5484d] text-[#f2f2f3]'
-                  : 'bg-[#18181b] border-[#27272c] text-[#8b8b94]'
+                  ? 'active-glow-card shadow-lg'
+                  : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-[#8b8b94] hover:from-[#202025]'
               }`}
             >
               <Zap className="w-4 h-4 text-[#5fd3b0] mb-1" />
@@ -109,7 +109,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
         </div>
 
         {/* Auto-Fix Toggle */}
-        <div className="p-3 bg-[#18181b] rounded-2xl border border-[#27272c] flex items-center justify-between">
+        <div className="p-3.5 bg-gradient-to-br from-[#18181c] to-[#121215] rounded-2xl flex items-center justify-between shadow-sm">
           <div className="min-w-0 pr-3">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-[#f2f2f3]">
               <Wrench className="w-3.5 h-3.5 text-amber-400" />
@@ -125,12 +125,12 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
             role="switch"
             aria-checked={settings.autoFixErrors}
             onClick={() => onUpdateSettings({ autoFixErrors: !settings.autoFixErrors })}
-            className={`tap w-12 h-6 rounded-full transition-colors relative shrink-0 ${
-              settings.autoFixErrors ? 'bg-[#e5484d]' : 'bg-[#303036]'
+            className={`tap w-12 h-6 rounded-full transition-all relative shrink-0 ${
+              settings.autoFixErrors ? 'bg-gradient-to-r from-red-600 to-rose-600 shadow-md shadow-red-950/50' : 'bg-[#303036]'
             }`}
           >
             <span
-              className={`block w-4 h-4 bg-white rounded-full transition-transform absolute top-1 ${
+              className={`block w-4 h-4 bg-white rounded-full transition-transform absolute top-1 shadow-sm ${
                 settings.autoFixErrors ? 'left-7' : 'left-1'
               }`}
             />

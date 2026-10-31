@@ -267,8 +267,8 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
                   }}
                   className={`cursor-move select-none z-30 ${
                     isSelected
-                      ? 'ring-1 ring-[#e5484d]/40 rounded-lg'
-                      : 'hover:ring-1 hover:ring-white/20 rounded-lg'
+                      ? 'ring-2 ring-[#e5484d]/60 rounded-full'
+                      : 'hover:ring-1 hover:ring-white/30 rounded-full'
                   }`}
                 >
                   <div className="p-1 relative">

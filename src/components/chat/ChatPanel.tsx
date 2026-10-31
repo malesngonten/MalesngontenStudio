@@ -206,16 +206,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     {msg.attachments.map((att) => (
                       <div
                         key={att.id}
-                        className="flex items-center gap-1.5 p-1 rounded-md bg-black/40 border border-white/10 text-[11px]"
+                        className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-full bg-black/40 text-[11px]"
                       >
                         {att.type === 'image' && att.url ? (
                           <img
                             src={att.url}
                             alt={att.name}
-                            className="w-8 h-8 object-cover rounded"
+                            className="w-7 h-7 object-cover rounded-full"
                           />
                         ) : (
-                          <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
                             {att.type === 'audio' ? (
                               <Music className="w-3.5 h-3.5 text-emerald-400" />
                             ) : att.type === 'video' ? (
@@ -233,8 +233,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                 {/* Assistant Identity Banner */}
                 {!isUser && (
-                  <div className="flex items-center gap-1.5 mb-1.5 pb-1 border-b border-white/5 text-[11px] text-zinc-400">
-                    <div className="w-4 h-4 rounded overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
+                  <div className="flex items-center gap-1.5 mb-1.5 pb-1 text-[11px] text-zinc-400">
+                    <div className="w-4 h-4 rounded-full overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
                       <img
                         src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
                         alt="Cat Logo"
@@ -256,18 +256,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                 {/* ACP Tool Executions */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white/5 space-y-1">
+                  <div className="mt-2 pt-1 space-y-1">
                     {msg.toolCalls.map((tool) => {
                       const isExpanded = !!expandedTools[tool.id];
                       return (
                         <div
                           key={tool.id}
-                          className="bg-black/30 border border-white/5 rounded-lg overflow-hidden text-xs"
+                          className="bg-black/30 rounded-2xl overflow-hidden text-xs shadow-inner"
                         >
                           <button
                             type="button"
                             onClick={() => toggleToolExpand(tool.id)}
-                            className="w-full px-2 py-1 flex items-center justify-between text-left hover:bg-white/5 transition-colors gap-2"
+                            className="w-full px-2.5 py-1.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors gap-2 rounded-full"
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Terminal className="w-3 h-3 text-red-400 shrink-0" />
@@ -296,10 +296,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                           </button>
 
                           {isExpanded && (
-                            <div className="px-2 py-1.5 border-t border-white/5 bg-black/50 space-y-1 text-[10px] font-mono text-zinc-400">
+                            <div className="px-2.5 py-1.5 bg-black/50 space-y-1 text-[10px] font-mono text-zinc-400">
                               {tool.description && <p>{tool.description}</p>}
                               {tool.result && (
-                                <div className="text-emerald-400/90 bg-emerald-950/20 p-1 rounded border border-emerald-900/30">
+                                <div className="text-emerald-300 bg-emerald-950/30 p-1.5 rounded-xl">
                                   {tool.result}
                                 </div>
                               )}

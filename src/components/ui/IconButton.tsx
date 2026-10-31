@@ -26,11 +26,11 @@ export const IconButton: React.FC<IconButtonProps> = ({
 
   const variantClasses = {
     ghost: active 
-      ? 'bg-[#222226] text-[#e5484d]' 
-      : 'bg-transparent text-[#8b8b94] hover:text-[#f2f2f3] active:bg-[#222226]/50',
-    primary: 'bg-[#e5484d] hover:bg-[#d93d42] text-white shadow-sm',
-    secondary: 'bg-[#222226] text-[#f2f2f3] border border-[#303036] hover:bg-[#2c2c31]',
-    danger: 'bg-[#e5484d]/15 text-[#e5484d] border border-[#e5484d]/30 hover:bg-[#e5484d]/25',
+      ? 'bg-gradient-to-r from-red-600/30 to-rose-600/20 text-[#ff6369] shadow-xs' 
+      : 'bg-transparent text-[#8b8b94] hover:text-[#f2f2f3] active:bg-white/[0.08]',
+    primary: 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 text-white shadow-md shadow-red-950/40',
+    secondary: 'bg-gradient-to-b from-[#28282f] to-[#1d1d23] text-[#f2f2f3] hover:from-[#32323b] hover:to-[#24242c] shadow-sm',
+    danger: 'bg-gradient-to-r from-[#e5484d]/25 to-[#e5484d]/15 text-[#ff6369] hover:from-[#e5484d]/35 hover:to-[#e5484d]/20 shadow-xs',
   };
 
   return (
