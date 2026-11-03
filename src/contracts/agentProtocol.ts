@@ -71,6 +71,11 @@ export interface IAgentClient {
       currentFrame: number;
       selectedClip?: TimelineClip | null;
       activeFile?: string;
+      byok?: {
+        baseUrl: string;
+        apiKey: string;
+        modelId: string;
+      };
     },
     onUpdate?: (partialMessage: AgentMessage, toolCall?: AgentToolCall) => void
   ): Promise<AgentMessage>;

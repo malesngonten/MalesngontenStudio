@@ -10,6 +10,8 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   agentStatus: AgentStatus;
   onOpenAgentDiscovery?: () => void;
+  onOpenAiSettings?: () => void;
+  byokModelId?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   agentStatus,
   onOpenAgentDiscovery,
+  onOpenAiSettings,
+  byokModelId,
 }) => {
   const getStatusIndicator = () => {
     switch (agentStatus) {
@@ -55,42 +59,40 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-12 bg-gradient-to-b from-[#141418] via-[#0d0d10] to-[#09090b] px-3 sm:px-4 flex items-center justify-between gap-2 select-none shrink-0 z-30 shadow-md">
-      {/* 1. Left: Brand Logo & Title */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      {/* 1. Left: Clean Brand Logo Avatar (Nama Brand Dihilangkan Sesuai Permintaan) */}
+      <div className="flex items-center min-w-0">
         <button
           type="button"
           onClick={onOpenSettings}
           title="Tentang Males Ngonten Studio"
-          className="tap flex items-center gap-2 text-left group transition-transform active:scale-98"
+          className="tap flex items-center group transition-transform active:scale-95"
+          aria-label="Tentang Studio"
         >
-          <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-red-500 to-rose-700 shrink-0 shadow-md flex items-center justify-center p-0.5">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-red-500 via-rose-600 to-red-600 shrink-0 shadow-md flex items-center justify-center p-0.5 hover:ring-2 hover:ring-red-500/40 transition-all">
             <img
               src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
-              alt="Males Ngonten Logo"
+              alt="Logo"
               className="w-full h-full object-cover rounded-full"
             />
-          </div>
-          <div className="min-w-0 flex items-center gap-1.5">
-            <span className="text-xs sm:text-sm font-bold tracking-tight text-white group-hover:text-red-400 transition-colors truncate">
-              Males Ngonten
-            </span>
-            <span className="text-[10px] font-bold text-red-300 bg-gradient-to-r from-red-600/30 to-rose-600/20 px-2 py-0.5 rounded-full tracking-wide uppercase">
-              AI
-            </span>
           </div>
         </button>
       </div>
 
       {/* 2. Right: ACP Status + Primary Ekspor Button (Kapsul, Tanpa Border, Gradasi Jelas) */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Indikator Koneksi AI Agent (ACP) di sebelah Ekspor */}
+        {/* Indikator Koneksi AI Agent / BYOK Model di sebelah Ekspor */}
         <button
           type="button"
-          onClick={onOpenAgentDiscovery}
-          title="Koneksi AI Coding Agent (ACP). Klik untuk melihat diagnostik ARM64 & agen lokal"
+          onClick={onOpenAiSettings || onOpenAgentDiscovery}
+          title="Koneksi AI Provider (BYOK). Klik untuk mengatur API Base URL, Key & Model ID"
           className="tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-zinc-800/90 to-zinc-900/90 hover:from-zinc-700/90 hover:to-zinc-800/90 shadow-sm transition-all text-xs"
         >
           {getStatusIndicator()}
+          {byokModelId && (
+            <span className="hidden sm:inline text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">
+              • {byokModelId}
+            </span>
+          )}
         </button>
 
         {/* Tombol Ekspor MP4 (Kapsul Gradasi Jelas) */}

@@ -13,6 +13,7 @@ import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectAsset, TimelineClip, TimelineLayer } from './types';
 import { Timeline } from './components/timeline/Timeline';
 import { BottomToolbar } from './components/toolbar/BottomToolbar';
+import { AgentSettingsSheet } from './components/settings/AgentSettingsSheet';
 import { Bot } from 'lucide-react';
 
 const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
@@ -77,6 +78,8 @@ export default function App() {
     handleSwitchSession,
     handleNewChat,
     handleDeleteSession,
+    agentSettings,
+    handleUpdateSettings,
   } = useStudioState();
 
   // Active Main View (AI-first tabs: Studio, Storyboard, Kode, Aset)
@@ -93,6 +96,7 @@ export default function App() {
   const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
 
   // Pre-filled prompt from canvas element action
   const [prefilledPrompt, setPrefilledPrompt] = useState<string>('');
@@ -242,6 +246,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         agentStatus={agentStatus}
         onOpenAgentDiscovery={() => setIsAgentDrawerOpen(true)}
+        onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+        byokModelId={agentSettings.modelId}
       />
 
       {/* 2. Main Workspace (with pb-14 for fixed bottom toolbar) */}
@@ -313,6 +319,9 @@ export default function App() {
                   selectedClipName={selectedClip?.name}
                   prefilledPrompt={prefilledPrompt}
                   onClose={() => setIsDesktopChatOpen(false)}
+                  onOpenSettings={() => setIsAiSettingsOpen(true)}
+                  byokModelId={agentSettings.modelId}
+                  isByokConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
                 />
               </section>
             )}
@@ -475,6 +484,14 @@ export default function App() {
         </div>
       </BottomSheet>
 
+      {/* OpenAI-Compatible BYOK AI Provider Settings Sheet */}
+      <AgentSettingsSheet
+        isOpen={isAiSettingsOpen}
+        onClose={() => setIsAiSettingsOpen(false)}
+        settings={agentSettings}
+        onUpdateSettings={handleUpdateSettings}
+      />
+
       {/* 4. Fixed Horizontally Scrollable Bottom Toolbar with Pinned Chat AI Primary Button */}
       <BottomToolbar
         activeView={activeView}
@@ -486,6 +503,8 @@ export default function App() {
         sessionsCount={sessions.length}
         onOpenChatHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+        isAiConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import {
   ProjectAsset,
   RenderJob,
   DiscoveredAgent,
+  AgentSettings,
 } from '../types';
 import {
   AgentMessage,
@@ -149,6 +150,16 @@ const DEFAULT_ASSETS: ProjectAsset[] = [
   },
 ];
 
+const deduplicateMessages = (msgs: AgentMessage[]): AgentMessage[] => {
+  const seen = new Set<string>();
+  return msgs.filter((m) => {
+    if (!m.id) return true;
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+};
+
 export function useStudioState() {
   const [timeline, setTimeline] = useState<TimelineData>(() => {
     try {
@@ -175,6 +186,43 @@ export function useStudioState() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [activeToolCalls, setActiveToolCalls] = useState<AgentToolCall[]>([]);
   const [assets, setAssets] = useState<ProjectAsset[]>(DEFAULT_ASSETS);
+
+  // BYOK OpenAI-Compatible Configuration
+  // CRITICAL: No default provider or model is set! Selection is entirely left to the user.
+  const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => {
+    try {
+      const saved = localStorage.getItem('males_ngonten_agent_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          apiBaseUrl: parsed.apiBaseUrl || '',
+          apiKey: parsed.apiKey || '',
+          modelId: parsed.modelId || '',
+          permissionMode: parsed.permissionMode || 'ask',
+          autoFixErrors: parsed.autoFixErrors ?? true,
+          maxAutoFixAttempts: parsed.maxAutoFixAttempts || 3,
+        };
+      }
+    } catch {}
+    return {
+      apiBaseUrl: '',
+      apiKey: '',
+      modelId: '',
+      permissionMode: 'ask',
+      autoFixErrors: true,
+      maxAutoFixAttempts: 3,
+    };
+  });
+
+  const handleUpdateSettings = useCallback((newSettings: Partial<AgentSettings>) => {
+    setAgentSettings((prev) => {
+      const updated = { ...prev, ...newSettings };
+      try {
+        localStorage.setItem('males_ngonten_agent_settings', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
 
   // Render Engine State
   const [currentRenderJob, setCurrentRenderJob] = useState<RenderJob | null>(null);
@@ -275,7 +323,7 @@ export function useStudioState() {
           const firstId = sList[0].id;
           setActiveSessionId(firstId);
           studioAgentClient.switchSession(firstId).then((msgs) => {
-            if (mounted) setMessages(msgs);
+            if (mounted) setMessages(deduplicateMessages(msgs));
           });
         }
       });
@@ -371,7 +419,7 @@ export function useStudioState() {
 
       setAgentStatus('thinking');
       const tempUserMsg: AgentMessage = {
-        id: `user-${Date.now()}`,
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         role: 'user',
         content: text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -383,7 +431,7 @@ export function useStudioState() {
         },
       };
 
-      setMessages((prev) => [...prev, tempUserMsg]);
+      setMessages((prev) => deduplicateMessages([...prev, tempUserMsg]));
 
       try {
         const assistantMsg = await studioAgentClient.sendMessage(
@@ -394,6 +442,11 @@ export function useStudioState() {
             currentFrame,
             selectedClip,
             activeFile: 'ShortVideoComposition.tsx',
+            byok: {
+              baseUrl: agentSettings.apiBaseUrl,
+              apiKey: agentSettings.apiKey,
+              modelId: agentSettings.modelId,
+            },
           },
           (partialMsg, toolCall) => {
             if (toolCall) {
@@ -405,7 +458,13 @@ export function useStudioState() {
           }
         );
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === assistantMsg.id);
+          if (exists) {
+            return prev.map((m) => (m.id === assistantMsg.id ? assistantMsg : m));
+          }
+          return [...prev, assistantMsg];
+        });
         setAgentStatus('idle');
 
         // Apply changes to timeline if the agent modified keywords
@@ -439,7 +498,7 @@ export function useStudioState() {
         setAgentStatus('idle');
       }
     },
-    [currentFrame, timeline, selectedClip, selectedClipId, syncTimelineToWorkspace]
+    [currentFrame, timeline, selectedClip, selectedClipId, syncTimelineToWorkspace, agentSettings]
   );
 
   // Stop agent execution
@@ -452,7 +511,7 @@ export function useStudioState() {
   const handleSwitchSession = useCallback(async (sessionId: string) => {
     setActiveSessionId(sessionId);
     const msgs = await studioAgentClient.switchSession(sessionId);
-    setMessages(msgs);
+    setMessages(deduplicateMessages(msgs));
   }, []);
 
   // Create new chat session
@@ -461,7 +520,7 @@ export function useStudioState() {
     setSessions(await studioAgentClient.getSessions());
     setActiveSessionId(newSession.id);
     const msgs = await studioAgentClient.switchSession(newSession.id);
-    setMessages(msgs);
+    setMessages(deduplicateMessages(msgs));
   }, []);
 
   // Delete chat session
@@ -472,7 +531,7 @@ export function useStudioState() {
     if (updated.length > 0) {
       setActiveSessionId(updated[0].id);
       const msgs = await studioAgentClient.switchSession(updated[0].id);
-      setMessages(msgs);
+      setMessages(deduplicateMessages(msgs));
     }
   }, []);
 
@@ -549,5 +608,7 @@ export function useStudioState() {
     handleSwitchSession,
     handleNewChat,
     handleDeleteSession,
+    agentSettings,
+    handleUpdateSettings,
   };
 }

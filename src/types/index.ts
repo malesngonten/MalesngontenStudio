@@ -140,10 +140,17 @@ export interface RenderJob {
 }
 
 export interface AgentSettings {
-  model: string;
-  permissionMode: 'ask' | 'auto'; // 'Tanya dulu' | 'Otomatis'
-  autoFixErrors: boolean;
-  maxAutoFixAttempts: number;
+  // BYOK OpenAI-compatible configuration (Flexible for any OpenAI-compatible provider)
+  apiBaseUrl: string;
+  apiKey: string;
+  modelId: string;
+  customHeaders?: Record<string, string>;
+
+  // ACP & Execution protocol
+  permissionMode?: 'ask' | 'auto'; // 'Tanya dulu' | 'Otomatis'
+  autoFixErrors?: boolean;
+  maxAutoFixAttempts?: number;
+  model?: string;
 }
 
 export interface DiscoveredAgent {

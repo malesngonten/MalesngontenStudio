@@ -15,6 +15,8 @@ import {
   Terminal,
   Sparkles,
   Bot,
+  Sliders,
+  Key,
 } from 'lucide-react';
 import { AgentMessage, AgentAttachment } from '../../contracts/agentProtocol';
 
@@ -27,6 +29,9 @@ interface ChatPanelProps {
   selectedClipName?: string;
   prefilledPrompt?: string;
   onClose?: () => void;
+  onOpenSettings?: () => void;
+  byokModelId?: string;
+  isByokConfigured?: boolean;
 }
 
 const AI_DIRECTOR_PROMPTS = [
@@ -47,10 +52,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   selectedClipName,
   prefilledPrompt,
   onClose,
+  onOpenSettings,
+  byokModelId,
+  isByokConfigured,
 }) => {
   const [inputText, setInputText] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [isMultiLine, setIsMultiLine] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +69,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   useEffect(() => {
     if (prefilledPrompt) {
       setInputText(prefilledPrompt);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        const scrollH = textareaRef.current.scrollHeight;
+        const expanded = prefilledPrompt.includes('\n') || scrollH > 34;
+        setIsMultiLine(expanded);
+        textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 120)}px` : 'auto';
+      }
       textareaRef.current?.focus();
     }
   }, [prefilledPrompt]);
@@ -69,12 +85,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAgentWorking]);
 
-  // Adjust textarea height automatically
+  // Adjust textarea height and border-radius dynamically based on line count
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInputText(e.target.value);
+    const text = e.target.value;
+    setInputText(text);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 100)}px`;
+      const scrollH = textareaRef.current.scrollHeight;
+      // When text wraps or has newlines (scrollHeight > 34px), expand radius to proportional; else pill shape
+      const expanded = text.includes('\n') || scrollH > 34;
+      setIsMultiLine(expanded);
+      textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 120)}px` : 'auto';
     }
   };
 
@@ -129,6 +150,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     onSendMessage(inputText, attachments);
     setInputText('');
     setAttachments([]);
+    setIsMultiLine(false);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -149,28 +171,67 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   return (
     <div className="w-full h-full flex flex-col bg-[#09090b] select-text relative overflow-hidden">
       {/* Sleek Top Header for Chat Panel - Kapsul, Gradasi Jelas Tanpa Border */}
-      <div className="h-10 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#141418] via-[#0d0d12] to-[#09090b] shadow-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/20 flex items-center justify-center">
+      <div className="h-10 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#141418] via-[#0d0d12] to-[#09090b] shadow-xs gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-5 h-5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/20 flex items-center justify-center shrink-0">
             <Bot className="w-3 h-3 text-red-400" />
           </div>
-          <span className="font-semibold text-xs text-white">AI Director Chat</span>
-          <span className="text-[10px] font-mono text-zinc-300 bg-gradient-to-r from-zinc-800 to-zinc-900 px-2 py-0.5 rounded-full shadow-xs">
+          <span className="font-semibold text-xs text-white truncate">AI Director Chat</span>
+          <span className="text-[10px] font-mono text-zinc-300 bg-gradient-to-r from-zinc-800 to-zinc-900 px-2 py-0.5 rounded-full shadow-xs shrink-0">
             ACP
           </span>
         </div>
 
-        {onClose && (
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className={`tap flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                isByokConfigured
+                  ? 'bg-gradient-to-r from-emerald-950/60 to-zinc-900 text-emerald-300 ring-1 ring-emerald-500/30'
+                  : 'bg-gradient-to-r from-amber-950/60 to-zinc-900 text-amber-300 ring-1 ring-amber-500/30 animate-pulse'
+              }`}
+              title="Pengaturan Koneksi AI Provider (BYOK)"
+            >
+              <Key className="w-3 h-3" />
+              <span className="max-w-[120px] truncate text-[10px] font-mono">
+                {isByokConfigured ? byokModelId || 'AI Aktif' : 'Atur AI (BYOK)'}
+              </span>
+            </button>
+          )}
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-800/60 to-zinc-900/60 text-zinc-400 hover:text-white transition-colors"
+              title="Sembunyikan Panel Chat"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Helper Banner when AI Provider is not yet configured */}
+      {!isByokConfigured && onOpenSettings && (
+        <div className="px-3 py-2 bg-gradient-to-r from-amber-950/40 via-zinc-900/90 to-zinc-900/90 flex items-center justify-between gap-2 shrink-0 text-[11px] text-amber-200 shadow-inner">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Key className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">
+              AI Provider belum diatur. Masukkan Base URL & Model ID Anda.
+            </span>
+          </div>
           <button
             type="button"
-            onClick={onClose}
-            className="tap w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-800/60 to-zinc-900/60 text-zinc-400 hover:text-white transition-colors"
-            title="Sembunyikan Panel Chat"
+            onClick={onOpenSettings}
+            className="tap px-2.5 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[10px] shrink-0 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            Atur Sekarang
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Hidden file input */}
       <input
@@ -184,12 +245,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-3 space-y-3 min-h-0 text-sm">
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
           const isUser = msg.role === 'user';
 
           return (
             <div
-              key={msg.id}
+              key={`${msg.id || 'msg'}-${index}`}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}
             >
               {/* Message Bubble - Kapsul Gradasi Jelas */}
@@ -394,22 +455,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         )}
 
-        {/* Command Form (Kapsul Bulat & Gradasi Jelas) */}
+        {/* Command Form (Kapsul Bulat Dinamis & Gradasi Jelas) */}
         <form
           onSubmit={handleSubmit}
-          className="flex items-center gap-1.5 bg-gradient-to-r from-zinc-900/95 via-zinc-850/95 to-zinc-900/95 rounded-full p-1.5 transition-all shadow-lg ring-1 ring-white/5 focus-within:ring-2 focus-within:ring-red-500/50"
+          className={`flex ${
+            isMultiLine ? 'items-end' : 'items-center'
+          } gap-1.5 bg-gradient-to-r from-zinc-900/95 via-zinc-850/95 to-zinc-900/95 p-1.5 shadow-lg ring-1 ring-white/5 focus-within:ring-2 focus-within:ring-red-500/50 transition-[border-radius,box-shadow] duration-200 ease-out`}
+          style={{
+            borderRadius: isMultiLine ? '18px' : '9999px',
+          }}
         >
           {/* File Attachment Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             title="Lampirkan Gambar/Video/Audio"
-            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all shrink-0 shadow-xs"
+            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all shrink-0 shadow-xs mb-0.5"
           >
             <Paperclip className="w-4 h-4" />
           </button>
 
-          {/* Text Input */}
+          {/* Text Input (Dinamis: 9999px jika 1 baris, proporsional jika multiline) */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -418,8 +484,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder="Perintahkan AI (misal: 'geser teks ke atas', 'bikin animasi zoom')..."
-            className="flex-1 bg-transparent text-white text-xs placeholder-zinc-500 resize-none outline-none py-1 px-2 max-h-[100px] font-sans text-left leading-relaxed"
-            style={{ direction: 'ltr', textAlign: 'left', unicodeBidi: 'normal' }}
+            className="flex-1 bg-transparent text-white text-xs placeholder-zinc-500 resize-none outline-none py-1.5 px-2 max-h-[120px] font-sans text-left leading-relaxed transition-[border-radius,height] duration-200 ease-out"
+            style={{
+              direction: 'ltr',
+              textAlign: 'left',
+              unicodeBidi: 'normal',
+              borderRadius: isMultiLine ? '12px' : '9999px',
+            }}
           />
 
           {/* Send / Stop Action Button (Kapsul Bulat) */}
@@ -428,7 +499,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               type="button"
               onClick={onStopAgent}
               title="Batalkan proses"
-              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-700 to-rose-700 text-white flex items-center justify-center hover:from-red-600 hover:to-rose-600 transition-all shrink-0 shadow-md shadow-red-950/50"
+              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-700 to-rose-700 text-white flex items-center justify-center hover:from-red-600 hover:to-rose-600 transition-all shrink-0 shadow-md shadow-red-950/50 mb-0.5"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
             </button>
@@ -437,7 +508,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               type="submit"
               disabled={!inputText.trim() && attachments.length === 0}
               title="Kirim instruksi ke AI"
-              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 text-white flex items-center justify-center transition-all shrink-0 shadow-md shadow-red-950/50 active:scale-95"
+              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 text-white flex items-center justify-center transition-all shrink-0 shadow-md shadow-red-950/50 active:scale-95 mb-0.5"
             >
               <ArrowUp className="w-4 h-4" />
             </button>

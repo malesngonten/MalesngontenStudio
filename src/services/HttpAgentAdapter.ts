@@ -103,6 +103,11 @@ export class HttpAgentAdapter implements IAgentClient {
       currentFrame: number;
       selectedClip?: TimelineClip | null;
       activeFile?: string;
+      byok?: {
+        baseUrl: string;
+        apiKey: string;
+        modelId: string;
+      };
     },
     onUpdate?: (partialMessage: AgentMessage, toolCall?: AgentToolCall) => void
   ): Promise<AgentMessage> {
@@ -118,12 +123,12 @@ export class HttpAgentAdapter implements IAgentClient {
         const timer = setTimeout(() => {
           // Fallback if SSE takes too long
           resolve({
-            id: `msg-${Date.now()}`,
+            id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             role: 'assistant',
             content: 'Perubahan video berhasil diproses oleh agent!',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           });
-        }, 8000);
+        }, 12000);
 
         const handleComplete = (e: MessageEvent) => {
           try {
@@ -164,13 +169,14 @@ export class HttpAgentAdapter implements IAgentClient {
         };
       });
 
-      // Post prompt to backend
+      // Post prompt to backend with byok config
       const res = await fetch('/api/agent/prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
           attachments,
+          byok: context?.byok,
           context: {
             playheadFrame: context?.currentFrame,
             playheadSec: context ? parseFloat((context.currentFrame / context.timeline.fps).toFixed(2)) : 0,

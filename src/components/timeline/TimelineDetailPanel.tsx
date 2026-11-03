@@ -320,17 +320,31 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                 <label className="text-[10px] font-semibold text-[#8b8b94] uppercase tracking-wider block">
                   Teks Subtitle Narasi
                 </label>
-                <textarea
-                  rows={2}
-                  value={selectedClip.props?.text || ''}
-                  onChange={(e) =>
-                    onUpdateClipProps(selectedLayer.id, selectedClip.id, {
-                      text: e.target.value,
-                    })
-                  }
-                  className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-2xl px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-[#5fd3b0] resize-none shadow-inner"
-                  placeholder="Ketik teks narasi..."
-                />
+                {(() => {
+                  const textVal = selectedClip.props?.text || '';
+                  const isMulti = textVal.includes('\n') || textVal.length > 40;
+                  return (
+                    <textarea
+                      rows={isMulti ? 3 : 1}
+                      value={textVal}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        onUpdateClipProps(selectedLayer.id, selectedClip.id, {
+                          text: val,
+                        });
+                        e.target.style.height = 'auto';
+                        if (val.includes('\n') || e.target.scrollHeight > 36) {
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                        }
+                      }}
+                      style={{
+                        borderRadius: isMulti ? '16px' : '9999px',
+                      }}
+                      className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-red-500/50 resize-none shadow-inner transition-[border-radius,height] duration-200 ease-out"
+                      placeholder="Ketik teks narasi..."
+                    />
+                  );
+                })()}
               </div>
             )}
 

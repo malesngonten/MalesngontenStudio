@@ -417,12 +417,12 @@ function discoverLocalAgents() {
     {
       id: 'agent-gemini',
       name: 'Gemini Agent (Google GenAI)',
-      command: 'gemini-2.5-flash',
+      command: 'gemini-3.8-flash',
       protocol: 'api',
-      version: geminiApiKey ? 'gemini-2.5-flash' : geminiCheck.version,
+      version: geminiApiKey ? 'gemini-3.8-flash' : geminiCheck.version,
       status: geminiApiKey || geminiCheck.exists ? 'ready' : 'not_found',
       description: geminiApiKey
-        ? 'Google Gemini 2.5 Flash aktif via server-side SDK untuk pembuatan dan optimasi timeline video otonom.'
+        ? 'Google Gemini 3.8 Flash aktif via server-side SDK untuk pembuatan dan optimasi timeline video otonom.'
         : 'Google Gemini agent untuk penyusunan dan pengeditan video. Aktifkan dengan menyetel GEMINI_API_KEY.',
       supportedTools: ['readFile', 'writeFile', 'modifyTimeline', 'generateCreativePlan'],
       latencyMs: geminiApiKey ? 110 : (geminiCheck.exists ? 60 : undefined),
@@ -598,17 +598,98 @@ app.post('/api/agent/cancel', (req, res) => {
   res.json({ success: true, message: 'Agent cancelled' });
 });
 
+// 5b. POST /api/agent/test-connection (OpenAI-Compatible BYOK connection test)
+app.post('/api/agent/test-connection', async (req, res) => {
+  const { baseUrl, apiKey, modelId } = req.body;
+
+  if (!baseUrl || typeof baseUrl !== 'string' || !baseUrl.trim()) {
+    return res.status(400).json({ success: false, error: 'API Base URL wajib diisi.' });
+  }
+
+  if (!modelId || typeof modelId !== 'string' || !modelId.trim()) {
+    return res.status(400).json({ success: false, error: 'Model ID wajib diisi.' });
+  }
+
+  const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+  const targetUrl = cleanBase.endsWith('/chat/completions')
+    ? cleanBase
+    : `${cleanBase}/chat/completions`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (apiKey && typeof apiKey === 'string' && apiKey.trim()) {
+    headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+  }
+
+  const startTime = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const apiRes = await fetch(targetUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: modelId.trim(),
+        messages: [
+          { role: 'user', content: 'Tes koneksi API. Balas satu kata: "OK".' },
+        ],
+        max_tokens: 15,
+        temperature: 0.1,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    const latencyMs = Date.now() - startTime;
+
+    if (!apiRes.ok) {
+      let errDetail = '';
+      try {
+        const errJson = await apiRes.json();
+        errDetail = errJson.error?.message || JSON.stringify(errJson);
+      } catch {
+        errDetail = await apiRes.text();
+      }
+      return res.status(apiRes.status).json({
+        success: false,
+        latencyMs,
+        status: apiRes.status,
+        error: `HTTP ${apiRes.status}: ${errDetail || 'Gagal tersambung ke provider'}`,
+      });
+    }
+
+    const data = await apiRes.json();
+    const reply = data.choices?.[0]?.message?.content || 'OK';
+
+    return res.json({
+      success: true,
+      latencyMs,
+      model: modelId.trim(),
+      reply,
+    });
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    return res.status(500).json({
+      success: false,
+      latencyMs,
+      error: err.name === 'AbortError' ? 'Koneksi timeout (melebihi 12 detik).' : (err.message || 'Gagal menghubungi host API.'),
+    });
+  }
+});
+
 // 6. POST /api/agent/prompt
 app.post('/api/agent/prompt', async (req, res) => {
-  const { text, context, attachments, sessionId } = req.body;
+  const { text, context, attachments, sessionId, byok } = req.body;
   const currentSession = chatSessions.find((s) => s.id === (sessionId || activeSessionId)) || chatSessions[0];
 
   if (!text && (!attachments || attachments.length === 0)) {
     return res.status(400).json({ error: 'Text or attachment is required' });
   }
 
-  // Create user message
-  const userMsgId = 'msg-' + Date.now();
+  // Create user message with guaranteed unique ID
+  const userMsgId = `msg-usr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const userMessage = {
     id: userMsgId,
     role: 'user',
@@ -624,8 +705,8 @@ app.post('/api/agent/prompt', async (req, res) => {
   agentStatus = 'thinking';
   broadcastSSE('agent_status', { status: 'thinking' });
 
-  // Response message placeholder
-  const aiMsgId = 'msg-' + (Date.now() + 1);
+  // Response message placeholder with guaranteed unique ID
+  const aiMsgId = `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const aiMessage: any = {
     id: aiMsgId,
     role: 'assistant',
@@ -685,10 +766,90 @@ app.post('/api/agent/prompt', async (req, res) => {
       let modificationSummary = '';
       let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
 
-      if (geminiClient && text) {
+      // 1. OpenAI-Compatible API (BYOK) - Flexible for any provider (OpenRouter, Groq, DeepSeek, OpenAI, Ollama, etc.)
+      const activeByok = byok || context?.byok;
+      const hasByok = Boolean(activeByok?.baseUrl && activeByok?.modelId);
+
+      if (hasByok && text) {
+        try {
+          const cleanBase = activeByok.baseUrl.trim().replace(/\/+$/, '');
+          const targetUrl = cleanBase.endsWith('/chat/completions')
+            ? cleanBase
+            : `${cleanBase}/chat/completions`;
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (activeByok.apiKey && typeof activeByok.apiKey === 'string' && activeByok.apiKey.trim()) {
+            headers['Authorization'] = `Bearer ${activeByok.apiKey.trim()}`;
+          }
+
+          const promptPayload = `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
+The user wants to modify their Remotion video project.
+
+Current timeline JSON:
+${JSON.stringify(currentTimelineData, null, 2)}
+
+User request:
+"${text}"
+
+Project Rules:
+${DEFAULT_GEMINI_RULES}
+
+Modify the timeline accordingly (layers, clips, texts, animations, audio).
+Return ONLY valid JSON matching this schema:
+{
+  "summary": "Short explanation in Indonesian of what was changed (1-2 sentences)",
+  "timeline": <complete updated timeline object matching the input structure>
+}`;
+
+          const aiResponse = await fetch(targetUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model: activeByok.modelId.trim(),
+              messages: [
+                { role: 'system', content: 'You are an expert Remotion video coding AI. You respond with pure JSON only.' },
+                { role: 'user', content: promptPayload },
+              ],
+              temperature: 0.2,
+            }),
+            signal: activeCancellationController?.signal,
+          });
+
+          if (aiResponse.ok) {
+            const data = await aiResponse.json();
+            const rawContent = data.choices?.[0]?.message?.content || '';
+            const cleaned = rawContent
+              .replace(/^```json/im, '')
+              .replace(/^```/im, '')
+              .replace(/```$/m, '')
+              .trim();
+            const parsed = JSON.parse(cleaned);
+            if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
+              updatedTimeline = parsed.timeline;
+              modificationSummary = parsed.summary || `Memperbarui timeline via model ${activeByok.modelId}.`;
+            }
+          } else {
+            let errText = '';
+            try {
+              const errObj = await aiResponse.json();
+              errText = errObj.error?.message || JSON.stringify(errObj);
+            } catch {
+              errText = await aiResponse.text();
+            }
+            console.warn(`[OpenAI-Compatible BYOK] Request failed with HTTP ${aiResponse.status}:`, errText);
+            modificationSummary = `[Peringatan Provider] Status HTTP ${aiResponse.status}: ${errText.slice(0, 120)}`;
+          }
+        } catch (byokErr: any) {
+          console.warn('[OpenAI-Compatible BYOK] Failed to run generative edit:', byokErr?.message || byokErr);
+          modificationSummary = `[Peringatan Koneksi] ${byokErr?.message || 'Gagal menghubungi server AI'}`;
+        }
+      } else if (!hasByok && geminiClient && text) {
+        // Optional server-side Gemini fallback only if GEMINI_API_KEY environment variable is present and no BYOK is provided
         try {
           const aiResponse = await geminiClient.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.8-flash',
             contents: `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
 The user wants to modify their Remotion video project.
 
