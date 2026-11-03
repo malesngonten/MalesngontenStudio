@@ -762,13 +762,14 @@ app.post('/api/agent/prompt', async (req, res) => {
       broadcastSSE('plan_update', { messageId: aiMsgId, plan: aiMessage.plan });
 
       // Determine editing actions based on user prompt
-      const promptLower = (text || '').toLowerCase();
       let modificationSummary = '';
       let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
 
       // 1. OpenAI-Compatible API (BYOK) - Flexible for any provider (OpenRouter, Groq, DeepSeek, OpenAI, Ollama, etc.)
       const activeByok = byok || context?.byok;
       const hasByok = Boolean(activeByok?.baseUrl && activeByok?.modelId);
+
+      let providerError: string | null = null;
 
       if (hasByok && text) {
         try {
@@ -829,6 +830,8 @@ Return ONLY valid JSON matching this schema:
             if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
               updatedTimeline = parsed.timeline;
               modificationSummary = parsed.summary || `Memperbarui timeline via model ${activeByok.modelId}.`;
+            } else {
+              providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
             }
           } else {
             let errText = '';
@@ -838,12 +841,10 @@ Return ONLY valid JSON matching this schema:
             } catch {
               errText = await aiResponse.text();
             }
-            console.warn(`[OpenAI-Compatible BYOK] Request failed with HTTP ${aiResponse.status}:`, errText);
-            modificationSummary = `[Peringatan Provider] Status HTTP ${aiResponse.status}: ${errText.slice(0, 120)}`;
+            providerError = `Status HTTP ${aiResponse.status}: ${errText.slice(0, 200)}`;
           }
         } catch (byokErr: any) {
-          console.warn('[OpenAI-Compatible BYOK] Failed to run generative edit:', byokErr?.message || byokErr);
-          modificationSummary = `[Peringatan Koneksi] ${byokErr?.message || 'Gagal menghubungi server AI'}`;
+          providerError = byokErr?.message || 'Gagal menghubungi server AI provider';
         }
       } else if (!hasByok && geminiClient && text) {
         // Optional server-side Gemini fallback only if GEMINI_API_KEY environment variable is present and no BYOK is provided
@@ -881,61 +882,39 @@ Return ONLY valid JSON matching this schema:
             }
           }
         } catch (geminiErr: any) {
-          console.warn('[Gemini API] Failed to run generative edit, falling back to local engine:', geminiErr?.message || geminiErr);
+          providerError = `Gemini API Error: ${geminiErr?.message || geminiErr}`;
         }
       }
 
-      if (!modificationSummary) {
-        if (promptLower.includes('subtitle') || promptLower.includes('caption') || promptLower.includes('teks')) {
-          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-          if (textLayer) {
-            const newClip = {
-              id: 'clip-t-' + Date.now(),
-              name: 'Caption Dinamis',
-              from: 20,
-              duration: 80,
-              props: {
-                text: promptLower.includes('caption') ? '🔥 RAHASIA KONTEN VIRAL 2026' : '⚡ Konten Video Otomatis!',
-                fontSize: 42,
-                color: '#5fd3b0',
-                y: 46,
-                x: 50,
-                animation: 'bounce',
-              },
-            };
-            textLayer.clips.push(newClip);
-            modificationSummary = 'Menambahkan klip teks animasi baru dengan efek bounce dan warna hijau neon.';
-          }
-        } else if (promptLower.includes('musik') || promptLower.includes('lagu') || promptLower.includes('audio')) {
-          const musicLayer = updatedTimeline.layers.find((l: any) => l.type === 'music');
-          if (musicLayer) {
-            musicLayer.clips = [
-              {
-                id: 'clip-m-' + Date.now(),
-                name: 'Cinematic Lo-Fi Pulse (Updated)',
-                from: 0,
-                duration: updatedTimeline.durationInFrames,
-                props: { volume: 0.95 },
-              },
-            ];
-            modificationSummary = 'Mengganti track musik latar dengan Cinematic Lo-Fi Pulse.';
-          }
-        } else if (promptLower.includes('zoom') || promptLower.includes('animasi') || promptLower.includes('gerak')) {
-          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-          if (textLayer && textLayer.clips.length > 0) {
-            textLayer.clips[0].props.animation = 'zoom';
-            textLayer.clips[0].props.fontSize = 50;
-            modificationSummary = 'Mengubah animasi teks headline utama menjadi efek Zoom 3D dinamis.';
-          }
-        } else {
-          // General creative enhancement
-          const textLayer = updatedTimeline.layers.find((l: any) => l.type === 'text');
-          if (textLayer && textLayer.clips.length > 0) {
-            textLayer.clips[0].props.text = text.length < 35 ? text : text.slice(0, 35) + '...';
-            modificationSummary = `Memperbarui teks utama sesuai instruksi: "${text.slice(0, 30)}..."`;
-          }
-        }
+      // If no provider configured or provider failed: NEVER fake a successful response!
+      if (!hasByok && !geminiClient) {
+        const warningMsg = '⚠️ **Provider AI Belum Terhubung**\n\nMales Ngonten Studio memerlukan koneksi ke AI provider aktif (BYOK OpenAI-Compatible atau Google Gemini). Silakan buka menu **Pengaturan (⚙️)** di bilah navigasi bawah untuk mengatur API Base URL, API Key, dan Model ID pilihan Anda (misalnya OpenRouter, Groq, DeepSeek, OpenAI, Ollama, dll).';
+        aiMessage.content = warningMsg;
+        aiMessage.text = warningMsg;
+        aiMessage.status = 'error';
+        aiMessage.plan[1].title = 'Koneksi AI tidak dikonfigurasi';
+        aiMessage.plan[1].completed = false;
+        aiMessage.plan[2].completed = false;
+        broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
+        const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
+        fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
+        return;
       }
+
+      if (providerError) {
+        const errorMsg = `❌ **Gagal Memproses Permintaan via AI**\n\n${providerError}\n\nSilakan periksa kembali API Base URL, API Key, atau kuota Model ID Anda pada menu **Pengaturan (⚙️)**.`;
+        aiMessage.content = errorMsg;
+        aiMessage.text = errorMsg;
+        aiMessage.status = 'error';
+        aiMessage.plan[1].title = 'Gagal memproses via AI';
+        aiMessage.plan[1].completed = false;
+        aiMessage.plan[2].completed = false;
+        broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
+        const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
+        fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
+        return;
+      }
+
 
       // Tool call 2: Write timeline.json to real disk
       const tool2: any = {

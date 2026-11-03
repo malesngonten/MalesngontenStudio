@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import {
   ArrowUp,
   Square,
+  Plus,
   Paperclip,
   X,
   FileCode,
@@ -17,6 +18,7 @@ import {
   Bot,
   Sliders,
   Key,
+  Mic,
 } from 'lucide-react';
 import { AgentMessage, AgentAttachment } from '../../contracts/agentProtocol';
 
@@ -72,9 +74,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
         const scrollH = textareaRef.current.scrollHeight;
-        const expanded = prefilledPrompt.includes('\n') || scrollH > 34;
+        const expanded = prefilledPrompt.includes('\n') || scrollH > 40;
         setIsMultiLine(expanded);
-        textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 120)}px` : 'auto';
+        textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 140)}px` : 'auto';
       }
       textareaRef.current?.focus();
     }
@@ -92,10 +94,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       const scrollH = textareaRef.current.scrollHeight;
-      // When text wraps or has newlines (scrollHeight > 34px), expand radius to proportional; else pill shape
-      const expanded = text.includes('\n') || scrollH > 34;
+      const expanded = text.includes('\n') || scrollH > 40;
       setIsMultiLine(expanded);
-      textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 120)}px` : 'auto';
+      textareaRef.current.style.height = expanded ? `${Math.min(scrollH, 140)}px` : 'auto';
     }
   };
 
@@ -169,33 +170,33 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#09090b] select-text relative overflow-hidden">
-      {/* Sleek Top Header for Chat Panel - Kapsul, Gradasi Jelas Tanpa Border */}
-      <div className="h-10 px-3 sm:px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#141418] via-[#0d0d12] to-[#09090b] shadow-xs gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/20 flex items-center justify-center shrink-0">
-            <Bot className="w-3 h-3 text-red-400" />
+    <div className="w-full h-full flex flex-col bg-[#09090c] select-text relative overflow-hidden">
+      {/* Sleek Minimalist Top Header for Chat Panel (No harsh borders, soft dark gradient) */}
+      <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#111116] to-[#09090c] shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-red-600/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-red-400" />
           </div>
-          <span className="font-semibold text-xs text-white truncate">AI Director Chat</span>
-          <span className="text-[10px] font-mono text-zinc-300 bg-gradient-to-r from-zinc-800 to-zinc-900 px-2 py-0.5 rounded-full shadow-xs shrink-0">
+          <span className="font-semibold text-sm sm:text-base text-white truncate">AI Director</span>
+          <span className="text-xs font-mono text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-full">
             ACP
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {onOpenSettings && (
             <button
               type="button"
               onClick={onOpenSettings}
-              className={`tap flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+              className={`tap flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-xs ${
                 isByokConfigured
-                  ? 'bg-gradient-to-r from-emerald-950/60 to-zinc-900 text-emerald-300 ring-1 ring-emerald-500/30'
-                  : 'bg-gradient-to-r from-amber-950/60 to-zinc-900 text-amber-300 ring-1 ring-amber-500/30 animate-pulse'
+                  ? 'bg-emerald-950/60 text-emerald-300'
+                  : 'bg-amber-950/60 text-amber-300 animate-pulse'
               }`}
               title="Pengaturan Koneksi AI Provider (BYOK)"
             >
-              <Key className="w-3 h-3" />
-              <span className="max-w-[120px] truncate text-[10px] font-mono">
+              <Key className="w-3.5 h-3.5" />
+              <span className="max-w-[130px] truncate">
                 {isByokConfigured ? byokModelId || 'AI Aktif' : 'Atur AI (BYOK)'}
               </span>
             </button>
@@ -205,10 +206,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="tap w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-800/60 to-zinc-900/60 text-zinc-400 hover:text-white transition-colors"
+              className="tap w-8 h-8 rounded-full flex items-center justify-center bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
               title="Sembunyikan Panel Chat"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -216,9 +217,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Helper Banner when AI Provider is not yet configured */}
       {!isByokConfigured && onOpenSettings && (
-        <div className="px-3 py-2 bg-gradient-to-r from-amber-950/40 via-zinc-900/90 to-zinc-900/90 flex items-center justify-between gap-2 shrink-0 text-[11px] text-amber-200 shadow-inner">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Key className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        <div className="px-4 py-2.5 bg-gradient-to-r from-amber-950/70 via-zinc-900 to-zinc-900 flex items-center justify-between gap-3 shrink-0 text-xs sm:text-sm text-amber-200 shadow-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <Key className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="truncate">
               AI Provider belum diatur. Masukkan Base URL & Model ID Anda.
             </span>
@@ -226,7 +227,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="tap px-2.5 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[10px] shrink-0 transition-colors"
+            className="tap px-3.5 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-xs shrink-0 transition-colors"
           >
             Atur Sekarang
           </button>
@@ -243,8 +244,32 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         onChange={handleFileChange}
       />
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-3 space-y-3 min-h-0 text-sm">
+      {/* Messages Scroll Area with Modern, Legible Typography */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 min-h-0 text-sm">
+        {messages.length === 0 && (
+          <div className="py-10 text-center space-y-4 max-w-md mx-auto flex flex-col items-center">
+            {/* Model Announcement Pill Badge (Directly inspired by Reference Screenshot) */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-850 text-zinc-300 text-xs font-medium shadow-md">
+              <span className="w-5 h-5 rounded-full bg-gradient-to-tr from-red-500 to-rose-400 text-white font-bold text-[11px] flex items-center justify-center">
+                AI
+              </span>
+              <span>{byokModelId ? byokModelId : 'Direct Video Generation'}</span>
+            </div>
+
+            {/* Bold Modern Hero Headline (Exact vibe of Reference Screenshot) */}
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
+              Build your video <br />
+              <span className="bg-gradient-to-r from-red-400 via-rose-300 to-white bg-clip-text text-transparent">
+                with AI Studio
+              </span>
+            </h2>
+
+            <p className="text-xs sm:text-sm text-zinc-400 max-w-xs leading-relaxed">
+              Tulis instruksi dalam bahasa Indonesia untuk mengubah teks, durasi, animasi, dan musik Remotion secara langsung.
+            </p>
+          </div>
+        )}
+
         {messages.map((msg, index) => {
           const isUser = msg.role === 'user';
 
@@ -253,21 +278,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               key={`${msg.id || 'msg'}-${index}`}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}
             >
-              {/* Message Bubble - Kapsul Gradasi Jelas */}
+              {/* Message Bubble - Symmetrical & Clean */}
               <div
-                className={`rounded-3xl px-3.5 py-2.5 max-w-[92%] sm:max-w-[85%] text-left shadow-md ${
+                className={`rounded-2xl px-4 py-3 max-w-[92%] sm:max-w-[85%] text-left shadow-lg ${
                   isUser
-                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white rounded-br-xs shadow-red-950/40'
-                    : 'bg-gradient-to-b from-zinc-800/90 to-zinc-900/90 text-zinc-100 rounded-bl-xs shadow-black/40'
+                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white rounded-br-xs'
+                    : 'bg-zinc-850/90 text-zinc-100 rounded-bl-xs ring-1 ring-white/5'
                 }`}
               >
                 {/* User Attachments Preview */}
                 {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2.5">
                     {msg.attachments.map((att) => (
                       <div
                         key={att.id}
-                        className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-full bg-black/40 text-[11px]"
+                        className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-black/40 text-xs font-medium"
                       >
                         {att.type === 'image' && att.url ? (
                           <img
@@ -286,7 +311,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                             )}
                           </div>
                         )}
-                        <span className="truncate max-w-[100px] text-[10px]">{att.name}</span>
+                        <span className="truncate max-w-[120px]">{att.name}</span>
                       </div>
                     ))}
                   </div>
@@ -294,7 +319,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                 {/* Assistant Identity Banner */}
                 {!isUser && (
-                  <div className="flex items-center gap-1.5 mb-1.5 pb-1 text-[11px] text-zinc-400">
+                  <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-white/[0.08] text-xs text-zinc-400">
                     <div className="w-4 h-4 rounded-full overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
                       <img
                         src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
@@ -304,12 +329,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     </div>
                     <span className="font-semibold text-white">AI Director</span>
                     <span className="text-zinc-600">·</span>
-                    <span className="font-mono text-[9px] text-zinc-500">Remotion ACP</span>
+                    <span className="font-mono text-[10px] text-zinc-400">Remotion Agent</span>
                   </div>
                 )}
 
-                {/* Markdown text */}
-                <div className="prose prose-invert prose-xs max-w-none break-words leading-relaxed text-zinc-200">
+                {/* Markdown text with comfortable line-height and size */}
+                <div className="prose prose-invert prose-sm max-w-none break-words leading-relaxed text-zinc-100 font-sans">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content}
                   </ReactMarkdown>
@@ -317,50 +342,50 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                 {/* ACP Tool Executions */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2 pt-1 space-y-1">
+                  <div className="mt-2.5 pt-1.5 space-y-1.5">
                     {msg.toolCalls.map((tool) => {
                       const isExpanded = !!expandedTools[tool.id];
                       return (
                         <div
                           key={tool.id}
-                          className="bg-black/30 rounded-2xl overflow-hidden text-xs shadow-inner"
+                          className="bg-black/35 rounded-xl overflow-hidden text-xs"
                         >
                           <button
                             type="button"
                             onClick={() => toggleToolExpand(tool.id)}
-                            className="w-full px-2.5 py-1.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors gap-2 rounded-full"
+                            className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-white/5 transition-colors gap-2"
                           >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <Terminal className="w-3 h-3 text-red-400 shrink-0" />
-                              <span className="font-mono text-[10px] text-zinc-300 font-medium truncate">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Terminal className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <span className="font-mono text-xs text-zinc-300 font-medium truncate">
                                 {tool.toolName}
                               </span>
                               {tool.durationMs && (
-                                <span className="text-[9px] text-zinc-500 font-mono shrink-0">
+                                <span className="text-[10px] text-zinc-500 font-mono shrink-0">
                                   {tool.durationMs}ms
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {tool.status === 'completed' && (
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                               )}
                               {tool.status === 'running' && (
-                                <span className="w-2.5 h-2.5 rounded-full border border-cyan-400 border-t-transparent animate-spin" />
+                                <span className="w-3 h-3 rounded-full border border-cyan-400 border-t-transparent animate-spin" />
                               )}
                               {isExpanded ? (
-                                <ChevronDown className="w-3 h-3 text-zinc-500" />
+                                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                               ) : (
-                                <ChevronRight className="w-3 h-3 text-zinc-500" />
+                                <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
                               )}
                             </div>
                           </button>
 
                           {isExpanded && (
-                            <div className="px-2.5 py-1.5 bg-black/50 space-y-1 text-[10px] font-mono text-zinc-400">
+                            <div className="px-3 py-2 bg-black/50 space-y-1 text-xs font-mono text-zinc-400">
                               {tool.description && <p>{tool.description}</p>}
                               {tool.result && (
-                                <div className="text-emerald-300 bg-emerald-950/30 p-1.5 rounded-xl">
+                                <div className="text-emerald-300 bg-emerald-950/40 p-2 rounded-lg mt-1">
                                   {tool.result}
                                 </div>
                               )}
@@ -374,7 +399,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                 {/* Message Timestamp */}
                 <div
-                  className={`text-[9px] font-mono mt-1 ${
+                  className={`text-[10px] font-mono mt-1.5 ${
                     isUser ? 'text-red-200/70 text-right' : 'text-zinc-500'
                   }`}
                 >
@@ -385,20 +410,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           );
         })}
 
-        {/* Live Agent Working Status Bar - Kapsul Gradasi */}
+        {/* Live Agent Working Status Bar */}
         {isAgentWorking && (
-          <div className="flex items-center gap-2.5 bg-gradient-to-r from-zinc-800/95 via-zinc-850/95 to-zinc-900/95 px-4 py-2 rounded-full max-w-sm text-xs text-zinc-300 shadow-lg">
-            <span className="w-3.5 h-3.5 rounded-full border-2 border-red-500 border-t-transparent animate-spin shrink-0" />
+          <div className="flex items-center gap-3 bg-zinc-850 px-4 py-2.5 rounded-2xl max-w-sm text-sm text-zinc-200 shadow-xl ring-1 ring-white/10">
+            <span className="w-4 h-4 rounded-full border-2 border-red-500 border-t-transparent animate-spin shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white truncate text-[11px]">AI Agent sedang meracik...</p>
-              <p className="text-[10px] text-zinc-400 font-mono truncate">
-                Remotion Live Recompile via ACP
+              <p className="font-semibold text-white truncate text-xs">AI Agent sedang meracik...</p>
+              <p className="text-[11px] text-zinc-400 font-mono truncate">
+                Remotion Recompile via ACP
               </p>
             </div>
             <button
               type="button"
               onClick={onStopAgent}
-              className="tap px-3 py-1 bg-gradient-to-r from-red-700 to-rose-700 hover:from-red-600 hover:to-rose-600 rounded-full text-[10px] text-white font-bold transition-all shadow-xs"
+              className="tap px-3 py-1 bg-red-600 hover:bg-red-500 rounded-full text-xs text-white font-bold transition-all shrink-0"
             >
               Stop
             </button>
@@ -408,74 +433,59 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Modern Suggestion Chips - Kapsul Gradasi Tanpa Border */}
-      <div className="px-3 py-2 bg-gradient-to-b from-transparent to-[#09090b] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+      {/* Modern Suggestion Chips (Directly Inspired by Google AI Studio Screenshot) */}
+      <div className="px-4 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 bg-gradient-to-r from-[#0d0d12] via-[#09090c] to-[#0d0d12]">
         {AI_DIRECTOR_PROMPTS.map((prompt, idx) => (
           <button
             key={idx}
             type="button"
             onClick={() => onSendMessage(prompt, [])}
             disabled={isAgentWorking}
-            className="tap whitespace-nowrap text-[11px] px-3.5 py-1.5 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 text-zinc-300 hover:text-white transition-all shrink-0 disabled:opacity-50 active:scale-95 shadow-xs"
+            className="tap whitespace-nowrap text-xs sm:text-sm font-medium px-4 py-2 rounded-full bg-gradient-to-r from-zinc-850 to-zinc-800 hover:from-zinc-800 hover:to-zinc-750 text-zinc-200 hover:text-white transition-all shrink-0 disabled:opacity-40 active:scale-95 shadow-sm"
           >
             {prompt}
           </button>
         ))}
       </div>
 
-      {/* Bottom Command Center Input Area - Kapsul & Gradasi Tanpa Border */}
-      <div className="p-2.5 sm:p-3 bg-gradient-to-t from-black via-[#0d0d12] to-transparent shrink-0 z-10">
+      {/* Bottom Command Center Card - Unified Prompt Box (Directly Inspired by Reference Screenshot) */}
+      <div className="p-3 sm:p-4 bg-gradient-to-t from-black via-[#09090d] to-[#09090c] shrink-0 z-10">
         {/* Attachment Previews */}
         {attachments.length > 0 && (
-          <div className="flex items-center gap-1.5 mb-2 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-2 mb-2.5 overflow-x-auto no-scrollbar py-0.5">
             {attachments.map((att) => (
               <div
                 key={att.id}
-                className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full bg-gradient-to-r from-zinc-800 to-zinc-900 text-xs text-zinc-300 shadow-sm"
+                className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full bg-zinc-800 text-xs text-zinc-200 shadow-md"
               >
                 {att.type === 'image' && att.url ? (
                   <img
                     src={att.url}
                     alt={att.name}
-                    className="w-4 h-4 object-cover rounded-full"
+                    className="w-5 h-5 object-cover rounded-full"
                   />
                 ) : (
-                  <Paperclip className="w-3 h-3 text-red-400" />
+                  <Paperclip className="w-4 h-4 text-red-400" />
                 )}
-                <span className="max-w-[100px] truncate">{att.name}</span>
+                <span className="max-w-[140px] truncate text-xs font-medium">{att.name}</span>
                 <button
                   type="button"
                   onClick={() => removeAttachment(att.id)}
-                  className="tap w-4 h-4 rounded-full bg-zinc-700/60 flex items-center justify-center text-zinc-300 hover:text-red-400"
+                  className="tap w-5 h-5 rounded-full bg-zinc-700/70 flex items-center justify-center text-zinc-300 hover:text-red-400"
                 >
-                  <X className="w-2.5 h-2.5" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
           </div>
         )}
 
-        {/* Command Form (Kapsul Bulat Dinamis & Gradasi Jelas) */}
+        {/* Unified Prompt Container Card with Soft Gradient Surface (No Harsh Borders) */}
         <form
           onSubmit={handleSubmit}
-          className={`flex ${
-            isMultiLine ? 'items-end' : 'items-center'
-          } gap-1.5 bg-gradient-to-r from-zinc-900/95 via-zinc-850/95 to-zinc-900/95 p-1.5 shadow-lg ring-1 ring-white/5 focus-within:ring-2 focus-within:ring-red-500/50 transition-[border-radius,box-shadow] duration-200 ease-out`}
-          style={{
-            borderRadius: isMultiLine ? '18px' : '9999px',
-          }}
+          className="bg-gradient-to-b from-[#181822] via-[#131319] to-[#0f0f14] rounded-3xl p-3 shadow-2xl transition-all flex flex-col gap-2.5"
         >
-          {/* File Attachment Button */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="Lampirkan Gambar/Video/Audio"
-            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all shrink-0 shadow-xs mb-0.5"
-          >
-            <Paperclip className="w-4 h-4" />
-          </button>
-
-          {/* Text Input (Dinamis: 9999px jika 1 baris, proporsional jika multiline) */}
+          {/* Main Input Textarea with Dynamic Border Radius */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -483,36 +493,67 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             value={inputText}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder="Perintahkan AI (misal: 'geser teks ke atas', 'bikin animasi zoom')..."
-            className="flex-1 bg-transparent text-white text-xs placeholder-zinc-500 resize-none outline-none py-1.5 px-2 max-h-[120px] font-sans text-left leading-relaxed transition-[border-radius,height] duration-200 ease-out"
+            placeholder="Describe a video idea and let AI do the rest..."
+            className="w-full bg-zinc-850/60 text-white text-sm sm:text-base placeholder-zinc-500 resize-none outline-none px-4 py-2.5 min-h-[42px] max-h-[140px] font-sans text-left leading-relaxed transition-[border-radius,height,background-color] duration-200 ease-out focus:bg-zinc-800/80"
             style={{
               direction: 'ltr',
               textAlign: 'left',
               unicodeBidi: 'normal',
-              borderRadius: isMultiLine ? '12px' : '9999px',
+              borderRadius: isMultiLine ? '16px' : '9999px',
             }}
           />
 
-          {/* Send / Stop Action Button (Kapsul Bulat) */}
-          {isAgentWorking ? (
-            <button
-              type="button"
-              onClick={onStopAgent}
-              title="Batalkan proses"
-              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-700 to-rose-700 text-white flex items-center justify-center hover:from-red-600 hover:to-rose-600 transition-all shrink-0 shadow-md shadow-red-950/50 mb-0.5"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!inputText.trim() && attachments.length === 0}
-              title="Kirim instruksi ke AI"
-              className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 text-white flex items-center justify-center transition-all shrink-0 shadow-md shadow-red-950/50 active:scale-95 mb-0.5"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-          )}
+          {/* Bottom Card Controls Row: (+) Attachment, Model Picker, and Sparkle/Send */}
+          <div className="flex items-center justify-between pt-1">
+            {/* Left Controls */}
+            <div className="flex items-center gap-2">
+              {/* Plus (+) Attachment Button (Circle) */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Lampirkan File / Media"
+                className="tap w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 hover:text-white transition-all shrink-0 shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+
+              {/* Model Picker Pill (like "Default ⌵" in reference screenshot) */}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Pilih Model / Konfigurasi AI (BYOK)"
+                className="tap flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-all text-xs sm:text-sm font-semibold shadow-sm"
+              >
+                <span className="truncate max-w-[120px] sm:max-w-[160px]">
+                  {byokModelId ? byokModelId : 'Model ⌵'}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+              </button>
+            </div>
+
+            {/* Right Controls: Send / Stop */}
+            <div className="flex items-center gap-2">
+              {isAgentWorking ? (
+                <button
+                  type="button"
+                  onClick={onStopAgent}
+                  title="Batalkan proses"
+                  className="tap w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-500 transition-all shrink-0 shadow-lg shadow-red-950/60"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!inputText.trim() && attachments.length === 0}
+                  title="Kirim instruksi ke AI"
+                  className="tap w-10 h-10 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 text-white flex items-center justify-center transition-all shrink-0 shadow-lg shadow-red-950/50 active:scale-95"
+                >
+                  <Sparkles className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
         </form>
       </div>
     </div>

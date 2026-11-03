@@ -5,8 +5,7 @@ import {
   Code2,
   FolderOpen,
   MessageSquare,
-  Info,
-  Key,
+  Settings,
 } from 'lucide-react';
 import { StudioView } from '../header/Header';
 
@@ -20,7 +19,6 @@ interface BottomToolbarProps {
   sessionsCount: number;
   onOpenChatHistory: () => void;
   onOpenSettings: () => void;
-  onOpenAiSettings: () => void;
   isAiConfigured?: boolean;
 }
 
@@ -41,7 +39,6 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   sessionsCount,
   onOpenChatHistory,
   onOpenSettings,
-  onOpenAiSettings,
   isAiConfigured,
 }) => {
   const isChatActive = activeView === 'studio' && isChatOpen;
@@ -53,7 +50,6 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
     (label: string, e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement> | React.PointerEvent<HTMLElement> | React.TouchEvent<HTMLElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
-      // Clamp within viewport so tooltip is never clipped
       const clampedX = Math.max(56, Math.min(window.innerWidth - 56, centerX));
       const placeAbove = rect.top > 48;
       const targetY = placeAbove ? rect.top - 8 : rect.bottom + 8;
@@ -67,7 +63,6 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
         placeAbove,
       });
 
-      // Auto dismiss on touch after 2 seconds
       if ('touches' in e) {
         tooltipTimerRef.current = setTimeout(() => {
           setTooltip(null);
@@ -82,7 +77,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
     setTooltip(null);
   }, []);
 
-  const handleChatAIClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleChatAIClick = () => {
     if (activeView !== 'studio') {
       onSelectView('studio');
       if (!isChatOpen) {
@@ -103,35 +98,35 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             top: `${tooltip.y}px`,
             transform: tooltip.placeAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
           }}
-          className="fixed z-50 pointer-events-none px-3 py-1 rounded-full text-[11px] font-semibold text-white bg-gradient-to-r from-zinc-900/95 via-zinc-800/95 to-zinc-900/95 backdrop-blur-md shadow-2xl ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-150 whitespace-nowrap"
+          className="fixed z-50 pointer-events-none px-3.5 py-1.5 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 shadow-2xl animate-in fade-in zoom-in-95 duration-150 whitespace-nowrap"
         >
           {tooltip.label}
         </div>
       )}
 
-      {/* 2. Fixed Bottom Toolbar Container (Pure Minimalist Icons, Tanpa Border) */}
+      {/* Fixed Bottom Toolbar Container (Pure Minimalist Icons, Zero Borders) */}
       <div className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black via-[#0c0c10] to-[#121218]/95 backdrop-blur-xl select-none shadow-2xl safe-pb">
         <div className="flex items-center gap-2 px-3 py-2">
-          {/* 1. FIXED PRIMARY BUTTON: Chat AI (Kapsul Ikon Murni, Tetap di Kiri) */}
+          {/* 1. FIXED PRIMARY BUTTON: Chat AI Studio */}
           <div className="shrink-0 flex items-center">
             <button
               type="button"
               onClick={handleChatAIClick}
-              onMouseEnter={(e) => handleShowTooltip(isChatActive ? 'Tutup Chat AI' : 'Buka Chat AI Studio', e)}
+              onMouseEnter={(e) => handleShowTooltip(isChatActive ? 'Tutup Percakapan AI' : 'Buka Percakapan AI', e)}
               onMouseLeave={handleHideTooltip}
-              onTouchStart={(e) => handleShowTooltip(isChatActive ? 'Tutup Chat AI' : 'Buka Chat AI Studio', e)}
-              onFocus={(e) => handleShowTooltip(isChatActive ? 'Tutup Chat AI' : 'Buka Chat AI Studio', e)}
+              onTouchStart={(e) => handleShowTooltip(isChatActive ? 'Tutup Percakapan AI' : 'Buka Percakapan AI', e)}
+              onFocus={(e) => handleShowTooltip(isChatActive ? 'Tutup Percakapan AI' : 'Buka Percakapan AI', e)}
               onBlur={handleHideTooltip}
               aria-label="Chat AI Studio"
-              className={`tap w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 relative ${
+              className={`tap w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 relative ${
                 isChatActive
-                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-red-950/60 ring-2 ring-red-400/50'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white shadow-red-950/60'
                   : 'bg-gradient-to-r from-zinc-800 via-zinc-800/90 to-zinc-900 text-zinc-200 hover:text-white shadow-black/40'
               }`}
             >
               <Bot className="w-5 h-5 text-white shrink-0" />
               <span
-                className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2 ring-zinc-950 ${
+                className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
                   isChatActive ? 'bg-white animate-pulse' : 'bg-red-400'
                 }`}
               />
@@ -141,8 +136,27 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
           {/* Divider Gradasi Lembut (Tanpa Border) */}
           <div className="w-[1.5px] h-6 bg-gradient-to-b from-transparent via-white/20 to-transparent shrink-0" />
 
-          {/* 2. HORIZONTALLY SCROLLABLE SECONDARY TOOLS (Murni Ikon Kapsul dengan Tooltip Melayang) */}
-          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap py-0.5">
+          {/* 2. HORIZONTALLY SCROLLABLE SECONDARY TOOLS */}
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto scrollbar-none whitespace-nowrap py-0.5">
+            {/* Studio Canvas */}
+            <button
+              type="button"
+              onClick={() => onSelectView('studio')}
+              onMouseEnter={(e) => handleShowTooltip('Studio Preview', e)}
+              onMouseLeave={handleHideTooltip}
+              onTouchStart={(e) => handleShowTooltip('Studio Preview', e)}
+              onFocus={(e) => handleShowTooltip('Studio Preview', e)}
+              onBlur={handleHideTooltip}
+              aria-label="Studio Preview"
+              className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs ${
+                activeView === 'studio'
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Bot className="w-4 h-4 shrink-0" />
+            </button>
+
             {/* Storyboard */}
             <button
               type="button"
@@ -155,33 +169,33 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               aria-label="Storyboard"
               className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs ${
                 activeView === 'storyboard'
-                  ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md shadow-red-950/50 ring-2 ring-rose-400/40'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-300 hover:text-white hover:from-zinc-700/80'
+                  ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white'
               }`}
             >
               <Layers className="w-4 h-4 shrink-0" />
             </button>
 
-            {/* Kode */}
+            {/* Kode Remotion */}
             <button
               type="button"
               onClick={() => onSelectView('code')}
-              onMouseEnter={(e) => handleShowTooltip('Kode Remotion', e)}
+              onMouseEnter={(e) => handleShowTooltip('Kode Remotion TSX', e)}
               onMouseLeave={handleHideTooltip}
-              onTouchStart={(e) => handleShowTooltip('Kode Remotion', e)}
-              onFocus={(e) => handleShowTooltip('Kode Remotion', e)}
+              onTouchStart={(e) => handleShowTooltip('Kode Remotion TSX', e)}
+              onFocus={(e) => handleShowTooltip('Kode Remotion TSX', e)}
               onBlur={handleHideTooltip}
               aria-label="Editor Kode"
               className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs ${
                 activeView === 'code'
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-950/50 ring-2 ring-purple-400/40'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-300 hover:text-white hover:from-zinc-700/80'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-950/50'
+                  : 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white'
               }`}
             >
               <Code2 className="w-4 h-4 shrink-0" />
             </button>
 
-            {/* Aset */}
+            {/* Aset Media */}
             <button
               type="button"
               onClick={() => onSelectView('assets')}
@@ -193,8 +207,8 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               aria-label="Aset Media"
               className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs ${
                 activeView === 'assets'
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-950/50 ring-2 ring-amber-400/40'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-300 hover:text-white hover:from-zinc-700/80'
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-950/50'
+                  : 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white'
               }`}
             >
               <FolderOpen className="w-4 h-4 shrink-0" />
@@ -212,73 +226,53 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               aria-label="Toggle Timeline"
               className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all relative shadow-xs ${
                 isTimelineVisible
-                  ? 'bg-gradient-to-r from-red-950/90 via-rose-900/80 to-red-900/90 text-rose-200 shadow-md ring-2 ring-red-500/40'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-950/50'
+                  : 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white'
               }`}
             >
-              <Layers className={`w-4 h-4 shrink-0 ${isTimelineVisible ? 'text-rose-400' : 'text-zinc-400'}`} />
-              <span
-                className={`absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full ring-1 ring-zinc-950 ${
-                  isTimelineVisible ? 'bg-red-400' : 'bg-zinc-600'
-                }`}
-              />
+              <Layers className="w-4 h-4 shrink-0" />
             </button>
 
             {/* Chat History / Sessions */}
             <button
               type="button"
               onClick={onOpenChatHistory}
-              onMouseEnter={(e) => handleShowTooltip(`Riwayat (${sessionsCount})`, e)}
+              onMouseEnter={(e) => handleShowTooltip(`Riwayat Percakapan (${sessionsCount})`, e)}
               onMouseLeave={handleHideTooltip}
-              onTouchStart={(e) => handleShowTooltip(`Riwayat (${sessionsCount})`, e)}
-              onFocus={(e) => handleShowTooltip(`Riwayat (${sessionsCount})`, e)}
+              onTouchStart={(e) => handleShowTooltip(`Riwayat Percakapan (${sessionsCount})`, e)}
+              onFocus={(e) => handleShowTooltip(`Riwayat Percakapan (${sessionsCount})`, e)}
               onBlur={handleHideTooltip}
               aria-label="Riwayat Percakapan"
-              className="tap w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 text-zinc-300 hover:text-white transition-all relative shadow-xs"
+              className="tap w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-400 hover:text-white transition-all relative shadow-xs"
             >
-              <MessageSquare className="w-4 h-4 text-zinc-400 shrink-0" />
+              <MessageSquare className="w-4 h-4 shrink-0" />
               {sessionsCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs ring-1 ring-zinc-950">
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
                   {sessionsCount}
                 </span>
               )}
             </button>
 
-            {/* AI Provider (BYOK) Settings */}
-            <button
-              type="button"
-              onClick={onOpenAiSettings}
-              onMouseEnter={(e) => handleShowTooltip(isAiConfigured ? 'Pengaturan AI (BYOK)' : 'Atur AI Provider (BYOK)', e)}
-              onMouseLeave={handleHideTooltip}
-              onTouchStart={(e) => handleShowTooltip(isAiConfigured ? 'Pengaturan AI (BYOK)' : 'Atur AI Provider (BYOK)', e)}
-              onFocus={(e) => handleShowTooltip(isAiConfigured ? 'Pengaturan AI (BYOK)' : 'Atur AI Provider (BYOK)', e)}
-              onBlur={handleHideTooltip}
-              aria-label="Pengaturan AI Provider"
-              className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all relative shadow-xs ${
-                isAiConfigured
-                  ? 'bg-gradient-to-r from-emerald-950/70 to-zinc-900/80 text-emerald-300 ring-1 ring-emerald-500/30'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-amber-300 hover:text-white'
-              }`}
-            >
-              <Key className="w-4 h-4 shrink-0" />
-              {!isAiConfigured && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              )}
-            </button>
-
-            {/* Project Info / Settings */}
+            {/* Unified Comprehensive Application Settings (Moved from header to bottom navbar as requested) */}
             <button
               type="button"
               onClick={onOpenSettings}
-              onMouseEnter={(e) => handleShowTooltip('Tentang Studio', e)}
+              onMouseEnter={(e) => handleShowTooltip('Pengaturan Aplikasi', e)}
               onMouseLeave={handleHideTooltip}
-              onTouchStart={(e) => handleShowTooltip('Tentang Studio', e)}
-              onFocus={(e) => handleShowTooltip('Tentang Studio', e)}
+              onTouchStart={(e) => handleShowTooltip('Pengaturan Aplikasi', e)}
+              onFocus={(e) => handleShowTooltip('Pengaturan Aplikasi', e)}
               onBlur={handleHideTooltip}
-              aria-label="Tentang Studio"
-              className="tap w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 text-zinc-300 hover:text-white transition-all shadow-xs"
+              aria-label="Pengaturan Aplikasi"
+              className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all relative shadow-xs ${
+                isAiConfigured
+                  ? 'bg-gradient-to-r from-zinc-850 to-zinc-900 text-zinc-300 hover:text-white'
+                  : 'bg-gradient-to-r from-amber-950/70 to-zinc-900 text-amber-300 hover:text-white'
+              }`}
             >
-              <Info className="w-4 h-4 text-zinc-400 shrink-0" />
+              <Settings className="w-4 h-4 shrink-0" />
+              {!isAiConfigured && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
             </button>
           </div>
         </div>

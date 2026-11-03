@@ -131,16 +131,36 @@ export class WorkspaceService implements IWorkspaceService {
       }
     }
 
-    // Fallback
-    return {
-      id: `asset-${Date.now()}`,
-      name: file.name,
-      type: file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image',
-      path: URL.createObjectURL(file),
-      size: file.size,
-      createdAt: 'Baru saja',
-    };
+    throw new Error('Gagal mengunggah aset ke server');
+  }
+
+  async uploadAssets(files: File[]): Promise<ProjectAsset[]> {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+
+    const res = await fetch('/api/assets', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.assets || [];
+    }
+    throw new Error('Gagal mengunggah file aset ke server');
+  }
+
+  async deleteAsset(id: string): Promise<ProjectAsset[]> {
+    const res = await fetch(`/api/assets/${id}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.assets || [];
+    }
+    throw new Error('Gagal menghapus aset dari server');
   }
 }
 
 export const studioWorkspace = new WorkspaceService();
+

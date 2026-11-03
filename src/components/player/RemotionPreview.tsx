@@ -6,6 +6,9 @@ import {
   Maximize2,
   RotateCcw,
   Layers,
+  ZoomIn,
+  ZoomOut,
+  RefreshCw,
 } from 'lucide-react';
 import { TimelineData, TimelineClip } from '../../types';
 import { ShortVideoComposition } from '../../remotion/ShortVideoComposition';
@@ -33,17 +36,49 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   selectedClipId,
   onSelectClip,
   onUpdateClipPosition,
-  onPromptElementAction,
   isTimelineOpen,
   onToggleTimeline,
 }) => {
   const playerRef = useRef<PlayerRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const videoFrameRef = useRef<HTMLDivElement>(null);
   const isInternalUpdateRef = useRef(false);
   const lastFrameRef = useRef(-1);
 
-  // Dragging state on canvas
+  // --- Remotion Player Zoom & Pan State ---
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isGesturing, setIsGesturing] = useState<boolean>(false);
+
+  // Touch gesture tracking references
+  const gestureRef = useRef<{
+    initialDistance: number;
+    initialScale: number;
+    initialMidX: number;
+    initialMidY: number;
+    initialPanX: number;
+    initialPanY: number;
+    is2Finger: boolean;
+    is1FingerPan: boolean;
+    startX: number;
+    startY: number;
+    lastTapTime: number;
+  }>({
+    initialDistance: 0,
+    initialScale: 1.0,
+    initialMidX: 0,
+    initialMidY: 0,
+    initialPanX: 0,
+    initialPanY: 0,
+    is2Finger: false,
+    is1FingerPan: false,
+    startX: 0,
+    startY: 0,
+    lastTapTime: 0,
+  });
+
+  // Dragging state on canvas for elements
   const [draggingClip, setDraggingClip] = useState<{
     layerId: string;
     clipId: string;
@@ -54,6 +89,12 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     currentX: number;
     currentY: number;
   } | null>(null);
+
+  // Reset zoom & pan helper
+  const handleResetZoom = useCallback(() => {
+    setZoomScale(1.0);
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
 
   // Sync external seek (timeline scrub) to playerRef
   useEffect(() => {
@@ -116,10 +157,132 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     }
   }, []);
 
+  // --- Pinch-to-zoom & Pan Touch Handlers for Remotion Player ---
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touches = e.touches;
+    const now = Date.now();
+
+    // 2-Finger Pinch-to-Zoom & 2-Finger Pan
+    if (touches.length === 2) {
+      e.preventDefault();
+      setIsGesturing(true);
+
+      const t1 = touches[0];
+      const t2 = touches[1];
+      const distance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      gestureRef.current.is2Finger = true;
+      gestureRef.current.is1FingerPan = false;
+      gestureRef.current.initialDistance = distance;
+      gestureRef.current.initialScale = zoomScale;
+      gestureRef.current.initialMidX = midX;
+      gestureRef.current.initialMidY = midY;
+      gestureRef.current.initialPanX = panOffset.x;
+      gestureRef.current.initialPanY = panOffset.y;
+      return;
+    }
+
+    // 1-Finger Touch: Double-tap detection or Zoomed Panning
+    if (touches.length === 1) {
+      const t = touches[0];
+
+      // Double-tap to reset or quick zoom
+      if (now - gestureRef.current.lastTapTime < 280) {
+        e.preventDefault();
+        if (zoomScale > 1.05 || panOffset.x !== 0 || panOffset.y !== 0) {
+          handleResetZoom();
+        } else {
+          setZoomScale(2.0);
+        }
+        gestureRef.current.lastTapTime = 0;
+        return;
+      }
+      gestureRef.current.lastTapTime = now;
+
+      // When zoomed in, allow 1-finger panning of the preview
+      if (zoomScale > 1.05 && !draggingClip) {
+        gestureRef.current.is1FingerPan = true;
+        gestureRef.current.is2Finger = false;
+        gestureRef.current.startX = t.clientX;
+        gestureRef.current.startY = t.clientY;
+        gestureRef.current.initialPanX = panOffset.x;
+        gestureRef.current.initialPanY = panOffset.y;
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touches = e.touches;
+
+    // 2-Finger Pinch Zoom & Pan
+    if (touches.length === 2 && gestureRef.current.is2Finger) {
+      e.preventDefault();
+      const t1 = touches[0];
+      const t2 = touches[1];
+      const currentDistance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const currentMidX = (t1.clientX + t2.clientX) / 2;
+      const currentMidY = (t1.clientY + t2.clientY) / 2;
+
+      if (gestureRef.current.initialDistance > 0) {
+        const ratio = currentDistance / gestureRef.current.initialDistance;
+        const newScale = Math.min(4.0, Math.max(0.6, gestureRef.current.initialScale * ratio));
+
+        const deltaMidX = currentMidX - gestureRef.current.initialMidX;
+        const deltaMidY = currentMidY - gestureRef.current.initialMidY;
+
+        setZoomScale(newScale);
+        setPanOffset({
+          x: gestureRef.current.initialPanX + deltaMidX,
+          y: gestureRef.current.initialPanY + deltaMidY,
+        });
+      }
+      return;
+    }
+
+    // 1-Finger Pan when zoomed in
+    if (touches.length === 1 && gestureRef.current.is1FingerPan) {
+      e.preventDefault();
+      const t = touches[0];
+      const deltaX = t.clientX - gestureRef.current.startX;
+      const deltaY = t.clientY - gestureRef.current.startY;
+
+      setPanOffset({
+        x: gestureRef.current.initialPanX + deltaX,
+        y: gestureRef.current.initialPanY + deltaY,
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsGesturing(false);
+    gestureRef.current.is2Finger = false;
+    gestureRef.current.is1FingerPan = false;
+
+    // Snap back if zoomed out below 0.95
+    if (zoomScale < 0.95) {
+      setZoomScale(1.0);
+      setPanOffset({ x: 0, y: 0 });
+    }
+  };
+
+  // Mouse wheel zoom for desktop testability
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      e.preventDefault();
+      const zoomFactor = -e.deltaY * 0.005;
+      const nextScale = Math.min(4.0, Math.max(0.7, zoomScale + zoomFactor));
+      setZoomScale(nextScale);
+      if (nextScale <= 1.0) {
+        setPanOffset({ x: 0, y: 0 });
+      }
+    }
+  };
+
   // Format time display
   const currentSec = (currentFrame / timeline.fps).toFixed(2);
   const totalSec = (timeline.durationInFrames / timeline.fps).toFixed(2);
-  const progressPercent = Math.min(100, (currentFrame / (timeline.durationInFrames - 1 || 1)) * 100);
 
   // Active text clips at current frame that can be dragged
   const activeTextClips: { layerId: string; clip: TimelineClip }[] = [];
@@ -133,7 +296,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
       });
     });
 
-  // On-Canvas Drag Handlers
+  // On-Canvas Drag Handlers for individual text clips
   const handlePointerDown = (
     e: React.PointerEvent,
     layerId: string,
@@ -141,7 +304,6 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   ) => {
     if (!videoFrameRef.current || !onUpdateClipPosition) return;
     e.stopPropagation();
-    e.preventDefault();
 
     onSelectClip(layerId, clip.id);
 
@@ -169,16 +331,20 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!draggingClip || !videoFrameRef.current || !onUpdateClipPosition) return;
     e.stopPropagation();
-    e.preventDefault();
 
     const rect = videoFrameRef.current.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
-    const deltaPixelX = e.clientX - draggingClip.startX;
-    const deltaPixelY = e.clientY - draggingClip.startY;
+    // Compensate for current zoomScale
+    const effectiveScale = zoomScale || 1.0;
+    const deltaPixelX = (e.clientX - draggingClip.startX) / effectiveScale;
+    const deltaPixelY = (e.clientY - draggingClip.startY) / effectiveScale;
 
-    const deltaPercentX = (deltaPixelX / rect.width) * 100;
-    const deltaPercentY = (deltaPixelY / rect.height) * 100;
+    const baseWidth = rect.width / effectiveScale;
+    const baseHeight = rect.height / effectiveScale;
+
+    const deltaPercentX = (deltaPixelX / baseWidth) * 100;
+    const deltaPercentY = (deltaPixelY / baseHeight) * 100;
 
     let nextX = Math.round(draggingClip.initialX + deltaPercentX);
     let nextY = Math.round(draggingClip.initialY + deltaPercentY);
@@ -212,135 +378,194 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     onFrameUpdate(frame);
   };
 
+  const isZoomed = Math.abs(zoomScale - 1.0) > 0.05 || Math.abs(panOffset.x) > 2 || Math.abs(panOffset.y) > 2;
+
   return (
     <div
       ref={containerRef}
       className="w-full h-full flex flex-col bg-[#050507] select-none relative overflow-hidden"
     >
-      {/* Video Viewport Area with Ambient Glow */}
-      <div className="flex-1 relative flex items-center justify-center p-3 sm:p-4 min-h-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900/40 via-[#09090b] to-[#050507]">
-        {/* Aspect Ratio 9:16 Canvas Frame */}
+      {/* 1. Video Viewport Area with data-allow-pinch-zoom="true" for global zoom lock exclusion */}
+      <div
+        ref={viewportRef}
+        data-allow-pinch-zoom="true"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        onWheel={handleWheel}
+        className="flex-1 relative flex items-center justify-center p-2 sm:p-4 min-h-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900/30 via-[#08080a] to-[#040406] overflow-hidden touch-none"
+      >
+        {/* Floating Zoom & Pan Status Pill (Minimalist, only shown when zoomed or panned) */}
+        {isZoomed && (
+          <div className="absolute top-2.5 right-2.5 z-40 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/80 backdrop-blur-md text-white text-xs font-mono shadow-xl animate-in fade-in duration-150">
+            <span className="font-semibold text-zinc-200">
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              title="Reset Zoom & Posisi (Kembali ke 100%)"
+              className="tap flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-[11px] transition-all ml-0.5"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          </div>
+        )}
+
+        {/* Zoomable & Pannable Transform Wrapper */}
         <div
-          ref={videoFrameRef}
-          className="h-full aspect-[9/16] bg-black shadow-2xl relative flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 ring-1 ring-white/5"
-          style={{ maxHeight: '100%' }}
+          style={{
+            transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0px) scale(${zoomScale})`,
+            transformOrigin: 'center center',
+            transition: isGesturing ? 'none' : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+            willChange: 'transform',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          className="relative pointer-events-auto"
         >
-          {/* Remotion Player Engine */}
-          <Player
-            ref={playerRef}
-            component={ShortVideoComposition}
-            inputProps={{ timeline }}
-            durationInFrames={timeline.durationInFrames}
-            fps={timeline.fps}
-            compositionWidth={timeline.width}
-            compositionHeight={timeline.height}
-            style={{
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-            }}
-            controls={false}
-            autoPlay={false}
-            loop
-          />
+          {/* Aspect Ratio 9:16 Canvas Frame (Always strictly preserves aspect ratio, Zero Borders) */}
+          <div
+            ref={videoFrameRef}
+            className="h-full aspect-[9/16] bg-black shadow-[0_10px_40px_rgba(0,0,0,0.85)] relative flex items-center justify-center overflow-hidden rounded-3xl"
+            style={{ maxHeight: '100%' }}
+          >
+            {/* Remotion Player Engine */}
+            <Player
+              ref={playerRef}
+              component={ShortVideoComposition}
+              inputProps={{ timeline }}
+              durationInFrames={timeline.durationInFrames}
+              fps={timeline.fps}
+              compositionWidth={timeline.width}
+              compositionHeight={timeline.height}
+              style={{
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+              }}
+              controls={false}
+              autoPlay={false}
+              loop
+            />
 
-          {/* Interactive Drag & Drop Hit Target on Active Elements (pure video, zero HUD/instruction clutter) */}
-          {!isPlaying &&
-            activeTextClips.map(({ layerId, clip }) => {
-              const isSelected = selectedClipId === clip.id;
-              const posX = clip.props?.x ?? 50;
-              const posY = clip.props?.y ?? 50;
+            {/* Interactive Drag & Drop Hit Target on Active Elements */}
+            {!isPlaying &&
+              activeTextClips.map(({ layerId, clip }) => {
+                const isSelected = selectedClipId === clip.id;
+                const posX = clip.props?.x ?? 50;
+                const posY = clip.props?.y ?? 50;
 
-              return (
-                <div
-                  key={clip.id}
-                  onPointerDown={(e) => handlePointerDown(e, layerId, clip)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerUp}
-                  style={{
-                    position: 'absolute',
-                    top: `${posY}%`,
-                    left: `${posX}%`,
-                    transform: 'translate(-50%, -50%)',
-                    touchAction: 'none',
-                  }}
-                  className={`cursor-move select-none z-30 ${
-                    isSelected
-                      ? 'ring-2 ring-[#e5484d]/60 rounded-full'
-                      : 'hover:ring-1 hover:ring-white/30 rounded-full'
-                  }`}
-                >
-                  <div className="p-1 relative">
-                    {/* Invisible hit target matching text area */}
-                    <div className="opacity-0 pointer-events-none text-center px-3 py-1 font-bold text-sm whitespace-nowrap">
-                      {clip.props?.text || clip.name}
+                return (
+                  <div
+                    key={clip.id}
+                    onPointerDown={(e) => handlePointerDown(e, layerId, clip)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    style={{
+                      position: 'absolute',
+                      top: `${posY}%`,
+                      left: `${posX}%`,
+                      transform: 'translate(-50%, -50%)',
+                      touchAction: 'none',
+                    }}
+                    className={`cursor-move select-none z-30 ${
+                      isSelected
+                        ? 'ring-2 ring-red-500/70 rounded-full'
+                        : 'hover:ring-1 hover:ring-white/30 rounded-full'
+                    }`}
+                  >
+                    <div className="p-1 relative">
+                      <div className="opacity-0 pointer-events-none text-center px-3 py-1 font-bold text-sm whitespace-nowrap">
+                        {clip.props?.text || clip.name}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+          </div>
         </div>
       </div>
 
-      {/* Floating Glass Control Dock - Kapsul & Gradasi Jelas Tanpa Border */}
-      <div className="h-12 px-3 sm:px-4 bg-gradient-to-t from-[#0e0e14]/95 via-[#0c0c10]/90 to-transparent backdrop-blur-md flex items-center justify-between gap-3 shrink-0 z-20">
-        {/* Left: Play/Pause & Timing (Kapsul Bulat) */}
-        <div className="flex items-center gap-2.5">
+      {/* 2. Floating Minimalist Control Dock - Clean, Soft Gradients, No Harsh Borders */}
+      <div className="h-11 px-3 sm:px-4 bg-gradient-to-t from-[#09090c] via-[#09090c]/90 to-transparent flex items-center justify-between gap-2 shrink-0 z-20">
+        {/* Left: Play/Pause & Timecode */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={onPlayPauseToggle}
-            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 flex items-center justify-center text-white active:scale-95 transition-all shadow-md shadow-red-950/50 shrink-0"
+            className="tap w-7 h-7 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 flex items-center justify-center text-white active:scale-95 transition-all shadow-md shadow-red-950/40 shrink-0"
             aria-label={isPlaying ? 'Jeda video' : 'Putar video'}
           >
             {isPlaying ? (
-              <Pause className="w-4 h-4 fill-white" />
+              <Pause className="w-3.5 h-3.5 fill-white" />
             ) : (
-              <Play className="w-4 h-4 fill-white translate-x-0.5" />
+              <Play className="w-3.5 h-3.5 fill-white translate-x-0.5" />
             )}
           </button>
 
-          {/* Time indicator (Kapsul) */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-zinc-900/90 to-zinc-800/80 text-xs font-mono tabular-nums text-zinc-300 shadow-xs">
-            <span className="font-bold text-white">{currentSec}s</span>
-            <span className="text-zinc-500">/</span>
+          {/* Time indicator */}
+          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-900/90 text-[11px] font-mono tabular-nums text-zinc-300 shadow-xs">
+            <span className="font-semibold text-white">{currentSec}s</span>
+            <span className="text-zinc-600">/</span>
             <span className="text-zinc-400">{totalSec}s</span>
           </div>
         </div>
 
-        {/* Center: Slim Timeline Scrubber (Kapsul) */}
-        <div className="flex-1 max-w-xs sm:max-w-md mx-2 flex items-center">
+        {/* Center: Slim Timeline Scrubber */}
+        <div className="flex-1 max-w-xs sm:max-w-md mx-1.5 flex items-center">
           <input
             type="range"
             min={0}
             max={Math.max(1, timeline.durationInFrames - 1)}
             value={currentFrame}
             onChange={handleScrubberChange}
-            className="w-full h-1.5 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded-full appearance-none cursor-pointer accent-red-500 hover:h-2 transition-all shadow-inner"
+            className="w-full h-1.5 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded-full appearance-none cursor-pointer accent-red-500 hover:h-2 transition-all"
             title="Geser timeline frame"
           />
         </div>
 
-        {/* Right: Quick actions (Semua Kapsul & Gradasi) */}
+        {/* Right: Quick actions (Track toggle, Zoom Reset, Rewind, Fullscreen) */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Zoom quick reset / status button */}
+          <button
+            type="button"
+            onClick={handleResetZoom}
+            title={isZoomed ? `Zoom: ${Math.round(zoomScale * 100)}% (Klik untuk Reset ke 100%)` : 'Pinch 2 jari pada video untuk Zoom'}
+            className={`tap px-2.5 py-1 rounded-full flex items-center gap-1 text-xs font-mono transition-all ${
+              isZoomed
+                ? 'bg-gradient-to-r from-red-950/90 to-zinc-900 text-rose-300 shadow-sm'
+                : 'bg-zinc-850/80 text-zinc-400 hover:text-white'
+            }`}
+          >
+            {zoomScale > 1.05 ? (
+              <ZoomIn className="w-3.5 h-3.5 text-rose-400" />
+            ) : zoomScale < 0.95 ? (
+              <ZoomOut className="w-3.5 h-3.5 text-rose-400" />
+            ) : (
+              <ZoomIn className="w-3.5 h-3.5 text-zinc-400" />
+            )}
+            <span className="font-semibold">{Math.round(zoomScale * 100)}%</span>
+          </button>
+
           {onToggleTimeline && (
             <button
               type="button"
               onClick={onToggleTimeline}
               title={isTimelineOpen ? 'Sembunyikan Timeline Track' : 'Tampilkan Timeline Track'}
-              className={`tap px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-semibold transition-all ${
+              className={`tap px-2.5 py-1 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all ${
                 isTimelineOpen
-                  ? 'bg-gradient-to-r from-red-950/90 via-rose-900/80 to-red-900/90 text-rose-200 shadow-md'
-                  : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 text-zinc-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-950/40'
+                  : 'bg-zinc-850/80 text-zinc-300 hover:text-white'
               }`}
             >
-              <Layers className={`w-3.5 h-3.5 ${isTimelineOpen ? 'text-rose-400' : 'text-zinc-400'}`} />
-              <span className="hidden xs:inline">{isTimelineOpen ? 'Track' : 'Track'}</span>
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isTimelineOpen ? 'bg-red-400' : 'bg-zinc-600'
-                }`}
-              />
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Timeline</span>
             </button>
           )}
 
@@ -348,18 +573,18 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             type="button"
             onClick={() => onFrameUpdate(0)}
             title="Reset ke awal (Frame 0)"
-            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white shadow-xs transition-colors"
+            className="tap w-7 h-7 rounded-full bg-zinc-850/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3 h-3" />
           </button>
 
           <button
             type="button"
             onClick={handleFullscreen}
             title="Mode Layar Penuh"
-            className="tap w-8 h-8 rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white shadow-xs transition-colors"
+            className="tap w-7 h-7 rounded-full bg-zinc-850/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
           >
-            <Maximize2 className="w-3.5 h-3.5" />
+            <Maximize2 className="w-3 h-3" />
           </button>
         </div>
       </div>

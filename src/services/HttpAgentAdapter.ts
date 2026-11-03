@@ -27,6 +27,8 @@ export class HttpAgentAdapter implements IAgentClient {
     this.initSSE();
   }
 
+  private onTextChunkCallback?: (msgId: string, chunk: string) => void;
+
   private initSSE() {
     if (typeof window === 'undefined') return;
 
@@ -55,6 +57,15 @@ export class HttpAgentAdapter implements IAgentClient {
           const data = JSON.parse(e.data);
           if (this.onToolUpdateCallback && data.toolCall) {
             this.onToolUpdateCallback(data.messageId, data.toolCall);
+          }
+        } catch {}
+      });
+
+      this.eventSource.addEventListener('text_chunk', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (this.onTextChunkCallback && data.chunk) {
+            this.onTextChunkCallback(data.messageId, data.chunk);
           }
         } catch {}
       });
@@ -88,7 +99,7 @@ export class HttpAgentAdapter implements IAgentClient {
     } catch (e) {
       this.backendAvailable = false;
     }
-    return mockInstance.connect();
+    return false;
   }
 
   getStatus(): AgentStatus {
@@ -111,24 +122,15 @@ export class HttpAgentAdapter implements IAgentClient {
     },
     onUpdate?: (partialMessage: AgentMessage, toolCall?: AgentToolCall) => void
   ): Promise<AgentMessage> {
-    if (!this.backendAvailable) {
-      return mockInstance.sendMessage(text, attachments, context, onUpdate);
-    }
-
     this.status = 'thinking';
+    let streamingAccumulated = '';
 
     try {
-      // Register temporary listener for tool calls & completion
+      // Register listener for tool calls, text chunks & completion
       const pendingPromise = new Promise<AgentMessage>((resolve, reject) => {
         const timer = setTimeout(() => {
-          // Fallback if SSE takes too long
-          resolve({
-            id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            role: 'assistant',
-            content: 'Perubahan video berhasil diproses oleh agent!',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          });
-        }, 12000);
+          reject(new Error('Koneksi timeout (melebihi 40 detik) saat menunggu respons dari agent.'));
+        }, 40000);
 
         const handleComplete = (e: MessageEvent) => {
           try {
@@ -154,13 +156,25 @@ export class HttpAgentAdapter implements IAgentClient {
           this.eventSource.addEventListener('message_complete', handleComplete);
         }
 
+        this.onTextChunkCallback = (msgId, chunk) => {
+          streamingAccumulated += chunk;
+          if (onUpdate) {
+            onUpdate({
+              id: msgId,
+              role: 'assistant',
+              content: streamingAccumulated,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+          }
+        };
+
         this.onToolUpdateCallback = (msgId, toolCall) => {
           if (onUpdate) {
             onUpdate(
               {
                 id: msgId,
                 role: 'assistant',
-                content: '',
+                content: streamingAccumulated,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               },
               toolCall
@@ -187,15 +201,30 @@ export class HttpAgentAdapter implements IAgentClient {
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned HTTP ${res.status}`);
+        let errDetail = '';
+        try {
+          const errObj = await res.json();
+          errDetail = errObj.error || JSON.stringify(errObj);
+        } catch {
+          errDetail = await res.text();
+        }
+        throw new Error(`Server returned HTTP ${res.status}: ${errDetail}`);
       }
 
       return await pendingPromise;
-    } catch (err) {
-      console.warn('Backend call failed, using mock agent fallback:', err);
-      return mockInstance.sendMessage(text, attachments, context, onUpdate);
+    } catch (err: any) {
+      this.status = 'idle';
+      const errMsg: AgentMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Gagal memproses permintaan: ${err?.message || 'Server tidak dapat dihubungi'}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      if (onUpdate) onUpdate(errMsg);
+      return errMsg;
     }
   }
+
 
   abort(): void {
     if (this.backendAvailable) {

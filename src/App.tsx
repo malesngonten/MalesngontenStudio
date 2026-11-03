@@ -3,6 +3,8 @@ import { useStudioState } from './state/useStudioState';
 import { Header, StudioView } from './components/header/Header';
 import { RemotionPreview } from './components/player/RemotionPreview';
 import { ChatPanel } from './components/chat/ChatPanel';
+import { PromptDock } from './components/chat/PromptDock';
+import { LiveAgentActivityCard } from './components/chat/LiveAgentActivityCard';
 import { StoryboardView } from './components/storyboard/StoryboardView';
 import { CodeEditorPanel } from './components/code/CodeEditorPanel';
 import { AssetTab } from './components/assets/AssetTab';
@@ -13,8 +15,9 @@ import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectAsset, TimelineClip, TimelineLayer } from './types';
 import { Timeline } from './components/timeline/Timeline';
 import { BottomToolbar } from './components/toolbar/BottomToolbar';
-import { AgentSettingsSheet } from './components/settings/AgentSettingsSheet';
-import { Bot } from 'lucide-react';
+import { UnifiedSettingsSheet } from './components/settings/UnifiedSettingsSheet';
+import { studioWorkspace } from './services/WorkspaceService';
+import { Bot, X, Sparkles } from 'lucide-react';
 
 const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
 // Powered by Remotion v4.0 & Males Ngonten Studio AI Agent
@@ -63,6 +66,7 @@ export default function App() {
     sessions,
     activeSessionId,
     messages,
+    activeToolCalls,
     assets,
     setAssets,
     currentRenderJob,
@@ -85,8 +89,11 @@ export default function App() {
   // Active Main View (AI-first tabs: Studio, Storyboard, Kode, Aset)
   const [activeView, setActiveView] = useState<StudioView>('studio');
 
-  // Timeline track visibility state (Always appears with Remotion player when active)
-  const [isTimelineVisible, setIsTimelineVisible] = useState<boolean>(true);
+  // Timeline track overlay visibility state (Clean floating overlay on top of full-height player)
+  const [isTimelineVisible, setIsTimelineVisible] = useState<boolean>(false);
+
+  // Full AI Conversation / ACP Thoughts slide-over sheet
+  const [isChatDrawerOpen, setIsChatDrawerOpen] = useState<boolean>(false);
 
   // Chat panel visibility state for expansive studio
   const [isDesktopChatOpen, setIsDesktopChatOpen] = useState<boolean>(true);
@@ -184,25 +191,19 @@ export default function App() {
     [setTimeline]
   );
 
-  // Handle asset upload
+  // Real Asset upload to backend storage & assets.json
   const handleUploadAssets = useCallback(
-    (newFiles: File[]) => {
-      const added: ProjectAsset[] = newFiles.map((file) => ({
-        id: `asset-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        name: file.name,
-        type: file.type.startsWith('image/')
-          ? 'image'
-          : file.type.startsWith('video/')
-          ? 'video'
-          : 'audio',
-        path: URL.createObjectURL(file),
-        size: file.size,
-        createdAt: 'Baru saja',
-      }));
-      setAssets((prev) => [...added, ...prev]);
+    async (newFiles: File[]) => {
+      try {
+        const updated = await studioWorkspace.uploadAssets(newFiles);
+        setAssets(updated);
+      } catch (e) {
+        console.error('Failed to upload asset files to server:', e);
+      }
     },
     [setAssets]
   );
+
 
   // Dynamic vertical split height calculation
   const getPlayerHeightClass = () => {
@@ -237,93 +238,103 @@ export default function App() {
   const currentSec = (currentFrame / timeline.fps).toFixed(2);
   const totalAssetsSize = assets.reduce((sum, a) => sum + (a.size || 0), 0);
 
+  const latestAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+  const isAgentActive =
+    agentStatus === 'thinking' ||
+    agentStatus === 'executing_tool' ||
+    agentStatus === 'streaming' ||
+    activeToolCalls.some((t) => t.status === 'running');
+
   return (
     <div className="w-full h-dvh max-h-dvh flex flex-col bg-[#09090b] text-[#f4f4f5] antialiased overflow-hidden select-none font-sans">
-      {/* 1. Clean Header: Brand + ACP Connection Status + Ekspor MP4 button */}
+      {/* 1. Icon-Only Clean Header (No sidebar, no text clutter, no settings gear) */}
       <Header
         onOpenRender={() => setIsRenderOpen(true)}
         isRendering={!!currentRenderJob}
-        onOpenSettings={() => setIsSettingsOpen(true)}
         agentStatus={agentStatus}
-        onOpenAgentDiscovery={() => setIsAgentDrawerOpen(true)}
-        onOpenAiSettings={() => setIsAiSettingsOpen(true)}
-        byokModelId={agentSettings.modelId}
       />
 
       {/* 2. Main Workspace (with pb-14 for fixed bottom toolbar) */}
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative pb-14">
-        {/* VIEW 1: STUDIO (AI Canvas + Collapsible Synced Timeline + AI Director Command Center as Primary Focus) */}
+        {/* VIEW 1: STUDIO (Full-Height Immersive Remotion Canvas + Live Agent Streaming Card + Non-Overlapping Bottom Surface) */}
         {activeView === 'studio' && (
-          <div className="w-full h-full flex flex-col md:flex-row overflow-hidden relative">
-            {/* Primary Studio Canvas Stage: Remotion Video Canvas + Collapsible Timeline Tracks */}
-            <section
-              className={`w-full flex flex-col relative shrink-0 min-h-0 bg-[#070709] transition-all duration-300 ${
-                isDesktopChatOpen
-                  ? 'flex-1 md:flex-1 h-[50vh] sm:h-[54vh] md:h-full'
-                  : 'h-full flex-1'
-              }`}
-            >
-              {/* Remotion Player Preview Canvas - ALWAYS expansive, never squeezed */}
-              <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
-                <RemotionPreview
-                  timeline={timeline}
-                  currentFrame={currentFrame}
-                  onFrameUpdate={handleFrameUpdate}
-                  isPlaying={isPlaying}
-                  onPlayPauseToggle={handlePlayPauseToggle}
-                  selectedClipId={selectedClipId}
-                  onSelectClip={handleSelectClip}
-                  onUpdateClipPosition={handleUpdateClipPosition}
-                  onPromptElementAction={(text, action) => {
-                    setPrefilledPrompt(`Tolong ubah elemen "${text}": ${action}`);
-                  }}
-                  isTimelineOpen={isTimelineVisible}
-                  onToggleTimeline={handleToggleTimeline}
+          <div className="w-full h-full flex flex-col overflow-hidden relative bg-[#070709]">
+            {/* FULL-HEIGHT HERO: Remotion Video Canvas with Unrestricted 2-Finger Pinch-to-Zoom */}
+            <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
+              <RemotionPreview
+                timeline={timeline}
+                currentFrame={currentFrame}
+                onFrameUpdate={handleFrameUpdate}
+                isPlaying={isPlaying}
+                onPlayPauseToggle={handlePlayPauseToggle}
+                selectedClipId={selectedClipId}
+                onSelectClip={handleSelectClip}
+                onUpdateClipPosition={handleUpdateClipPosition}
+                onPromptElementAction={(text, action) => {
+                  setPrefilledPrompt(`Tolong ubah elemen "${text}": ${action}`);
+                }}
+                isTimelineOpen={isTimelineVisible}
+                onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
+              />
+            </div>
+
+            {/* REALTIME AI STREAMING & ACP ACTIVITY CARD (Shows what file is being written, ACP tool checklist, progress) */}
+            {isAgentActive && (
+              <div className="shrink-0 pb-1 z-30">
+                <LiveAgentActivityCard
+                  status={agentStatus}
+                  activeToolCalls={
+                    activeToolCalls.length > 0
+                      ? activeToolCalls
+                      : latestAssistantMsg?.toolCalls || []
+                  }
+                  streamingText={latestAssistantMsg?.content}
+                  activeFile={activeFile}
+                  onStop={handleStopAgent}
+                  onOpenFullChat={() => setIsChatDrawerOpen(true)}
                 />
               </div>
+            )}
 
-              {/* Timeline Track: Yields on mobile when Chat is open so the Remotion Player is NEVER compromised */}
-              {isTimelineVisible && (
-                <div
-                  className={`shrink-0 bg-[#0c0c0e] z-20 transition-all duration-200 ${
-                    isDesktopChatOpen
-                      ? 'hidden md:block max-h-[145px] overflow-y-auto'
-                      : 'block'
-                  }`}
-                >
-                  <Timeline
-                    timeline={timeline}
-                    currentFrame={currentFrame}
-                    onSeek={handleFrameUpdate}
-                    selectedClipId={selectedClipId}
-                    onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
-                    onUpdateClipTiming={handleUpdateClipTiming}
-                  />
+            {/* BOTTOM SURFACE: When Timeline is active, show Timeline and HIDE floating prompt! */}
+            {isTimelineVisible ? (
+              <div className="shrink-0 max-h-[175px] overflow-y-auto bg-gradient-to-b from-[#14141c] to-[#0a0a0e] p-2 z-30 animate-in slide-in-from-bottom duration-150">
+                <div className="flex items-center justify-between px-3 py-1 text-xs text-zinc-400">
+                  <span className="font-semibold text-white">Track Timeline</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsTimelineVisible(false)}
+                    className="tap w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                    title="Tutup Timeline"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              )}
-            </section>
-
-            {/* AI Director Command Center: Primary Focus directly visible on Desktop & Mobile */}
-            {isDesktopChatOpen && (
-              <section className="w-full md:w-[380px] lg:w-[420px] flex-1 md:flex-none md:h-full flex flex-col min-h-0 relative bg-[#09090b] z-30">
-                <ChatPanel
-                  messages={messages}
-                  isAgentWorking={
-                    agentStatus === 'thinking' ||
-                    agentStatus === 'executing_tool' ||
-                    agentStatus === 'streaming'
-                  }
-                  onSendMessage={handleSendMessage}
-                  onStopAgent={handleStopAgent}
-                  currentSec={currentSec}
-                  selectedClipName={selectedClip?.name}
-                  prefilledPrompt={prefilledPrompt}
-                  onClose={() => setIsDesktopChatOpen(false)}
-                  onOpenSettings={() => setIsAiSettingsOpen(true)}
-                  byokModelId={agentSettings.modelId}
-                  isByokConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
+                <Timeline
+                  timeline={timeline}
+                  currentFrame={currentFrame}
+                  onSeek={handleFrameUpdate}
+                  selectedClipId={selectedClipId}
+                  onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
+                  onUpdateClipTiming={handleUpdateClipTiming}
                 />
-              </section>
+              </div>
+            ) : (
+              /* When Timeline is NOT active: Show the Clean Floating Prompt Dock */
+              <div className="shrink-0 z-20">
+                <PromptDock
+                  onSendMessage={handleSendMessage}
+                  isAgentWorking={isAgentActive}
+                  onStopAgent={handleStopAgent}
+                  prefilledPrompt={prefilledPrompt}
+                  byokModelId={agentSettings.modelId}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
+                  isTimelineOpen={isTimelineVisible}
+                  onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
+                  onOpenFullChat={() => setIsChatDrawerOpen(true)}
+                  messagesCount={messages.length}
+                />
+              </div>
             )}
           </div>
         )}
@@ -374,10 +385,17 @@ export default function App() {
               <AssetTab
                 assets={assets}
                 onUploadAssets={handleUploadAssets}
-                onDeleteAsset={(id) =>
-                  setAssets((prev) => prev.filter((a) => a.id !== id))
-                }
+                onDeleteAsset={async (id) => {
+                  try {
+                    const updated = await studioWorkspace.deleteAsset(id);
+                    setAssets(updated);
+                  } catch (e) {
+                    console.error('Failed to delete asset on server:', e);
+                    setAssets((prev) => prev.filter((a) => a.id !== id));
+                  }
+                }}
                 onUseAssetInChat={(asset: ProjectAsset) => {
+
                   setActiveView('studio');
                   handleSendMessage(
                     `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
@@ -484,26 +502,61 @@ export default function App() {
         </div>
       </BottomSheet>
 
-      {/* OpenAI-Compatible BYOK AI Provider Settings Sheet */}
-      <AgentSettingsSheet
-        isOpen={isAiSettingsOpen}
-        onClose={() => setIsAiSettingsOpen(false)}
+      {/* Full AI Director Chat & Execution Drawer */}
+      <BottomSheet
+        isOpen={isChatDrawerOpen}
+        onClose={() => setIsChatDrawerOpen(false)}
+        title="AI Director Percakapan & Log"
+        subtitle="Riwayat interaksi, eksekusi tool ACP, dan perubahan komposisi"
+      >
+        <div className="h-[75vh]">
+          <ChatPanel
+            messages={messages}
+            isAgentWorking={
+              agentStatus === 'thinking' ||
+              agentStatus === 'executing_tool' ||
+              agentStatus === 'streaming'
+            }
+            onSendMessage={handleSendMessage}
+            onStopAgent={handleStopAgent}
+            currentSec={currentSec}
+            selectedClipName={selectedClip?.name}
+            prefilledPrompt={prefilledPrompt}
+            onClose={() => setIsChatDrawerOpen(false)}
+            onOpenSettings={() => setIsAiSettingsOpen(true)}
+            byokModelId={agentSettings.modelId}
+            isByokConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
+          />
+        </div>
+      </BottomSheet>
+
+      {/* Comprehensive Application Settings Sheet (AI BYOK, Project Rules, Video parameters, System Info, Reset) */}
+      <UnifiedSettingsSheet
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         settings={agentSettings}
         onUpdateSettings={handleUpdateSettings}
+        projectRules={filesState['GEMINI.md']}
+        onUpdateProjectRules={(rules) =>
+          setFilesState((prev) => ({ ...prev, ['GEMINI.md']: rules }))
+        }
+        onResetAll={() => {
+          localStorage.clear();
+          window.location.reload();
+        }}
       />
 
       {/* 4. Fixed Horizontally Scrollable Bottom Toolbar with Pinned Chat AI Primary Button */}
       <BottomToolbar
         activeView={activeView}
         onSelectView={setActiveView}
-        isChatOpen={isDesktopChatOpen}
-        onToggleChat={handleToggleChat}
+        isChatOpen={isChatDrawerOpen}
+        onToggleChat={() => setIsChatDrawerOpen((prev) => !prev)}
         isTimelineVisible={isTimelineVisible}
-        onToggleTimeline={handleToggleTimeline}
+        onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
         sessionsCount={sessions.length}
         onOpenChatHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAiSettings={() => setIsAiSettingsOpen(true)}
         isAiConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
       />
     </div>

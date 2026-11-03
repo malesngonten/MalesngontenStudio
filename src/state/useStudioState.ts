@@ -466,40 +466,13 @@ export function useStudioState() {
           return [...prev, assistantMsg];
         });
         setAgentStatus('idle');
-
-        // Apply changes to timeline if the agent modified keywords
-        const lower = text.toLowerCase();
-        if (
-          lower.includes('headline') ||
-          lower.includes('teks') ||
-          lower.includes('subtitle') ||
-          lower.includes('tulisan')
-        ) {
-          setTimeline((prev) => {
-            const next = { ...prev };
-            const textLayer = next.layers.find((l) => l.type === 'text');
-            if (textLayer && textLayer.clips.length > 0) {
-              const c = textLayer.clips[0];
-              c.props = {
-                ...c.props,
-                animation: lower.includes('zoom')
-                  ? 'zoom'
-                  : lower.includes('bounce')
-                  ? 'bounce'
-                  : 'slide-up',
-                y: lower.includes('atas') ? 30 : lower.includes('bawah') ? 68 : 42,
-              };
-            }
-            syncTimelineToWorkspace(next);
-            return { ...next };
-          });
-        }
       } catch (err) {
         setAgentStatus('idle');
       }
     },
-    [currentFrame, timeline, selectedClip, selectedClipId, syncTimelineToWorkspace, agentSettings]
+    [currentFrame, timeline, selectedClip, selectedClipId, agentSettings]
   );
+
 
   // Stop agent execution
   const handleStopAgent = useCallback(() => {

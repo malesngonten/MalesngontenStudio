@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -9,8 +9,7 @@ import {
   Music,
   Clock,
   Sparkles,
-  MoveHorizontal,
-  GripVertical,
+  GripHorizontal,
 } from 'lucide-react';
 import { TimelineData, TimelineClip, TimelineLayer } from '../../types';
 
@@ -23,7 +22,7 @@ interface TimelineProps {
   onUpdateClipTiming?: (layerId: string, clipId: string, from: number, duration?: number) => void;
 }
 
-// Layer visual styling metadata - Clear gradients, capsule cards, zero borders
+// Layer visual styling metadata - Clear soft gradients, capsule cards, zero borders
 const getLayerMeta = (type: string, index: number) => {
   switch (type) {
     case 'video':
@@ -31,55 +30,50 @@ const getLayerMeta = (type: string, index: number) => {
         icon: Film,
         shortBadge: `V${index + 1}`,
         label: 'Video',
-        color: 'text-rose-200',
-        headerBg: 'bg-gradient-to-r from-rose-900/70 via-red-900/60 to-rose-950/70 text-rose-100 shadow-sm',
-        clipBg: 'bg-gradient-to-r from-rose-600/85 via-rose-500/75 to-pink-600/85 text-white shadow-md shadow-rose-950/50',
-        clipSelectedBg: 'bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-xl shadow-rose-950/80 ring-2 ring-white/90',
-        accentBar: 'bg-gradient-to-r from-rose-500 to-pink-500',
+        color: 'text-rose-300',
+        headerBg: 'bg-gradient-to-r from-rose-950/70 to-zinc-900/90 text-rose-200',
+        clipBg: 'bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 text-white shadow-md shadow-rose-950/40',
+        clipSelectedBg: 'bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-lg ring-2 ring-white/90',
       };
     case 'text':
       return {
         icon: Type,
         shortBadge: `T${index + 1}`,
         label: 'Teks',
-        color: 'text-purple-200',
-        headerBg: 'bg-gradient-to-r from-purple-900/70 via-violet-900/60 to-indigo-950/70 text-purple-100 shadow-sm',
-        clipBg: 'bg-gradient-to-r from-purple-600/85 via-violet-500/75 to-indigo-600/85 text-white shadow-md shadow-purple-950/50',
-        clipSelectedBg: 'bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 text-white shadow-xl shadow-purple-950/80 ring-2 ring-white/90',
-        accentBar: 'bg-gradient-to-r from-purple-500 to-indigo-500',
+        color: 'text-purple-300',
+        headerBg: 'bg-gradient-to-r from-purple-950/70 to-zinc-900/90 text-purple-200',
+        clipBg: 'bg-gradient-to-r from-purple-600 via-violet-500 to-indigo-600 text-white shadow-md shadow-purple-950/40',
+        clipSelectedBg: 'bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 text-white shadow-lg ring-2 ring-white/90',
       };
     case 'narration':
       return {
         icon: Mic,
         shortBadge: `VO`,
         label: 'Narasi',
-        color: 'text-emerald-200',
-        headerBg: 'bg-gradient-to-r from-emerald-900/70 via-teal-900/60 to-green-950/70 text-emerald-100 shadow-sm',
-        clipBg: 'bg-gradient-to-r from-emerald-600/85 via-teal-500/75 to-green-600/85 text-white shadow-md shadow-emerald-950/50',
-        clipSelectedBg: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 text-white shadow-xl shadow-emerald-950/80 ring-2 ring-white/90',
-        accentBar: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+        color: 'text-emerald-300',
+        headerBg: 'bg-gradient-to-r from-emerald-950/70 to-zinc-900/90 text-emerald-200',
+        clipBg: 'bg-gradient-to-r from-emerald-600 via-teal-500 to-green-600 text-white shadow-md shadow-emerald-950/40',
+        clipSelectedBg: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 text-white shadow-lg ring-2 ring-white/90',
       };
     case 'music':
       return {
         icon: Music,
         shortBadge: `A${index + 1}`,
         label: 'Musik',
-        color: 'text-sky-200',
-        headerBg: 'bg-gradient-to-r from-sky-900/70 via-blue-900/60 to-cyan-950/70 text-sky-100 shadow-sm',
-        clipBg: 'bg-gradient-to-r from-sky-600/85 via-blue-500/75 to-cyan-600/85 text-white shadow-md shadow-sky-950/50',
-        clipSelectedBg: 'bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-600 text-white shadow-xl shadow-sky-950/80 ring-2 ring-white/90',
-        accentBar: 'bg-gradient-to-r from-sky-500 to-cyan-500',
+        color: 'text-sky-300',
+        headerBg: 'bg-gradient-to-r from-sky-950/70 to-zinc-900/90 text-sky-200',
+        clipBg: 'bg-gradient-to-r from-sky-600 via-blue-500 to-cyan-600 text-white shadow-md shadow-sky-950/40',
+        clipSelectedBg: 'bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-600 text-white shadow-lg ring-2 ring-white/90',
       };
     default:
       return {
         icon: Sparkles,
         shortBadge: `FX`,
         label: 'Layer',
-        color: 'text-amber-200',
-        headerBg: 'bg-gradient-to-r from-amber-900/70 via-orange-900/60 to-yellow-950/70 text-amber-100 shadow-sm',
-        clipBg: 'bg-gradient-to-r from-amber-600/85 via-orange-500/75 to-yellow-600/85 text-white shadow-md shadow-amber-950/50',
-        clipSelectedBg: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-600 text-white shadow-xl shadow-amber-950/80 ring-2 ring-white/90',
-        accentBar: 'bg-gradient-to-r from-amber-500 to-orange-500',
+        color: 'text-amber-300',
+        headerBg: 'bg-gradient-to-r from-amber-950/70 to-zinc-900/90 text-amber-200',
+        clipBg: 'bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-600 text-white shadow-md shadow-amber-950/40',
+        clipSelectedBg: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-600 text-white shadow-lg ring-2 ring-white/90',
       };
   }
 };
@@ -96,7 +90,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [isExpanded, setIsExpanded] = useState(true);
   const [isScrubbingPlayhead, setIsScrubbingPlayhead] = useState(false);
 
-  // Dragging state for clips
+  // Dragging state for clips (move, trim-start, trim-end)
   const [activeClipDrag, setActiveClipDrag] = useState<{
     layerId: string;
     clipId: string;
@@ -116,22 +110,24 @@ export const Timeline: React.FC<TimelineProps> = ({
     (clientX: number) => {
       if (!tracksRef.current) return;
       const rect = tracksRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
       const clickX = clientX - rect.left;
       const ratio = Math.min(1, Math.max(0, clickX / rect.width));
-      const targetFrame = Math.round(ratio * totalFrames);
-      onSeek(Math.min(totalFrames, Math.max(0, targetFrame)));
+      const targetFrame = Math.round(ratio * (totalFrames - 1));
+      onSeek(Math.min(totalFrames - 1, Math.max(0, targetFrame)));
     },
     [totalFrames, onSeek]
   );
 
+  // Playhead Needle scrub
   const handlePlayheadPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setIsScrubbingPlayhead(true);
     handleSeekFromClientX(e.clientX);
 
     const onPointerMove = (ev: PointerEvent) => {
+      ev.preventDefault();
       handleSeekFromClientX(ev.clientX);
     };
 
@@ -139,19 +135,23 @@ export const Timeline: React.FC<TimelineProps> = ({
       setIsScrubbingPlayhead(false);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
+  // Ruler scrub
   const handleRulerPointerDown = (e: React.PointerEvent) => {
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+    e.preventDefault();
     setIsScrubbingPlayhead(true);
     handleSeekFromClientX(e.clientX);
 
     const onPointerMove = (ev: PointerEvent) => {
+      ev.preventDefault();
       handleSeekFromClientX(ev.clientX);
     };
 
@@ -159,19 +159,21 @@ export const Timeline: React.FC<TimelineProps> = ({
       setIsScrubbingPlayhead(false);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
+  // Empty Track Lane click seek
   const handleTrackLanePointerDown = (e: React.PointerEvent) => {
-    // Only seek if clicking empty space in the lane (not on a clip)
     if ((e.target as HTMLElement).closest('.timeline-clip-card')) return;
     handleSeekFromClientX(e.clientX);
   };
 
-  // --- CLIP DRAGGING LOGIC (MOVE & TRIM) ---
+  // --- CLIP DRAGGING & TRIMMING LOGIC ---
   const handleClipPointerDown = (
     e: React.PointerEvent,
     layer: TimelineLayer,
@@ -179,43 +181,52 @@ export const Timeline: React.FC<TimelineProps> = ({
     mode: 'move' | 'trim-start' | 'trim-end'
   ) => {
     e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
+    e.preventDefault();
 
     const startX = e.clientX;
     const initialFrom = clip.from;
     const initialDuration = clip.duration;
-    let didMove = false;
-
-    // Initial drag state
     let currentFrom = initialFrom;
     let currentDuration = initialDuration;
+    let didMove = false;
+
+    // Immediately select clip
+    onSelectClip(clip, layer);
+
+    // Initial drag state preview
+    setActiveClipDrag({
+      layerId: layer.id,
+      clipId: clip.id,
+      from: initialFrom,
+      duration: initialDuration,
+      mode,
+    });
 
     const onPointerMove = (moveEv: PointerEvent) => {
       if (!tracksRef.current) return;
+      moveEv.preventDefault();
+
       const deltaX = moveEv.clientX - startX;
-      if (Math.abs(deltaX) > 3) {
+      if (Math.abs(deltaX) > 2) {
         didMove = true;
       }
-      if (!didMove) return;
 
       const rect = tracksRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
+
       const deltaFrames = Math.round((deltaX / rect.width) * totalFrames);
 
       if (mode === 'move') {
-        // Shift timing freely (allows overlapping with other clips)
         const maxStart = Math.max(0, totalFrames - 5);
         currentFrom = Math.max(0, Math.min(maxStart, initialFrom + deltaFrames));
         currentDuration = initialDuration;
       } else if (mode === 'trim-start') {
-        // Trim left handle
         const rawNewFrom = initialFrom + deltaFrames;
         const clampedFrom = Math.max(0, Math.min(initialFrom + initialDuration - 5, rawNewFrom));
         const diff = clampedFrom - initialFrom;
         currentFrom = clampedFrom;
         currentDuration = Math.max(5, initialDuration - diff);
       } else if (mode === 'trim-end') {
-        // Trim right handle
         const rawDuration = initialDuration + deltaFrames;
         const maxDuration = totalFrames - initialFrom;
         currentDuration = Math.max(5, Math.min(maxDuration, rawDuration));
@@ -234,11 +245,12 @@ export const Timeline: React.FC<TimelineProps> = ({
     const onPointerUp = () => {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
 
       if (didMove && onUpdateClipTiming) {
         onUpdateClipTiming(layer.id, clip.id, currentFrom, currentDuration);
       }
-      // Always select the clip when touched
+
       onSelectClip(
         {
           ...clip,
@@ -251,11 +263,12 @@ export const Timeline: React.FC<TimelineProps> = ({
       setActiveClipDrag(null);
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
-  // Generate 5-6 interval second markers for the time ruler
+  // Generate second tick marks for time ruler
   const rulerTicks = [];
   const stepSec = totalSeconds <= 6 ? 1 : totalSeconds <= 15 ? 2 : 5;
   for (let sec = 0; sec <= totalSeconds; sec += stepSec) {
@@ -264,28 +277,25 @@ export const Timeline: React.FC<TimelineProps> = ({
   }
 
   return (
-    <div className="w-full bg-gradient-to-b from-[#131318] via-[#0e0e12] to-[#0a0a0c] px-3 py-2.5 select-none shrink-0 shadow-lg">
-      {/* 1. Header Bar with Track Counter & View Mode Toggle (Kapsul & Gradasi) */}
-      <div className="flex items-center justify-between pb-2 mb-2 text-xs text-zinc-400">
+    <div className="w-full bg-gradient-to-b from-[#111116] via-[#0c0c10] to-[#08080a] px-3 py-2 select-none shrink-0 shadow-lg">
+      {/* 1. Header Bar with Track Counter & View Mode Toggle */}
+      <div className="flex items-center justify-between pb-1.5 text-xs text-zinc-400">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/20 flex items-center justify-center shadow-xs">
+          <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
             <Layers className="w-3 h-3 text-red-400" />
           </div>
-          <span className="font-bold text-zinc-200 tracking-wider text-[11px]">TIMELINE</span>
-          <span className="text-[10px] bg-gradient-to-r from-zinc-800/90 to-zinc-900/90 px-2.5 py-0.5 rounded-full font-mono text-zinc-300 shadow-xs">
+          <span className="font-semibold text-zinc-200 text-xs tracking-wide">TIMELINE</span>
+          <span className="text-xs font-mono text-zinc-400">
             {timeline.layers.length} Track • {(totalFrames / timeline.fps).toFixed(1)}s
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-zinc-500 hidden sm:inline">
-            Geser klip untuk atur timing
-          </span>
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="tap flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-zinc-800/90 to-zinc-900/90 hover:from-zinc-700/90 hover:to-zinc-800/90 text-[11px] font-medium text-zinc-200 shadow-sm transition-all"
-            title={isExpanded ? 'Ganti ke tampilan ringkas' : 'Tampilkan semua layer'}
+            className="tap flex items-center gap-1 px-3 py-1 rounded-full bg-zinc-850 hover:bg-zinc-800 text-xs font-medium text-zinc-200 transition-all shadow-xs"
+            title={isExpanded ? 'Tampilan ringkas' : 'Semua track'}
           >
             <span>{isExpanded ? 'Semua Track' : 'Ringkas'}</span>
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-zinc-400" /> : <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />}
@@ -293,12 +303,12 @@ export const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* 2. Timeline Grid: Left Track Icons + Right Track Lanes & Ruler */}
+      {/* 2. Timeline Grid: Left Track Badges + Right Track Lanes & Ruler */}
       <div className="flex gap-2">
-        {/* Left Column: Track Headers with Icons (Kapsul Bulat) */}
-        <div className="w-[38px] shrink-0 flex flex-col gap-1.5">
+        {/* Left Column: Track Headers with Icons */}
+        <div className="w-8 shrink-0 flex flex-col gap-1.5">
           {/* Top spacer matching time ruler */}
-          <div className="h-[22px] flex items-center justify-center text-[10px] text-zinc-500 font-mono">
+          <div className="h-[20px] flex items-center justify-center text-[10px] text-zinc-500 font-mono">
             <Clock className="w-3 h-3 text-zinc-500" />
           </div>
 
@@ -311,15 +321,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               return (
                 <div
                   key={layer.id}
-                  className={`h-[38px] w-[38px] rounded-full flex flex-col items-center justify-center gap-0.5 transition-all shadow-sm ${
+                  className={`h-8 w-8 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all ${
                     hasSelectedClip
-                      ? `${meta.headerBg} ring-2 ring-white/60`
-                      : 'bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 hover:from-zinc-700/80'
+                      ? `${meta.headerBg} ring-1 ring-white/50`
+                      : 'bg-zinc-850 hover:bg-zinc-800'
                   }`}
                   title={`${layer.name} (${meta.label})`}
                 >
-                  <IconComponent className={`w-3.5 h-3.5 ${meta.color}`} />
-                  <span className="text-[8px] font-bold font-mono tracking-tight text-zinc-300 leading-none">
+                  <IconComponent className={`w-3 h-3 ${meta.color}`} />
+                  <span className="text-[7.5px] font-bold font-mono tracking-tight text-zinc-300 leading-none">
                     {meta.shortBadge}
                   </span>
                 </div>
@@ -327,7 +337,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             })
           ) : (
             <div
-              className="h-[32px] w-[38px] rounded-full bg-gradient-to-r from-zinc-800/80 to-zinc-900/80 flex flex-col items-center justify-center gap-0.5 shadow-sm"
+              className="h-7 w-8 rounded-full bg-zinc-850 flex flex-col items-center justify-center gap-0.5"
               title="Semua Track Terpadu"
             >
               <Layers className="w-3 h-3 text-red-400" />
@@ -339,29 +349,29 @@ export const Timeline: React.FC<TimelineProps> = ({
         {/* Right Column: Time Ruler, Track Lanes, Playhead */}
         <div
           ref={tracksRef}
-          className="relative flex-1 flex flex-col gap-1.5 select-none touch-none"
+          className="relative flex-1 flex flex-col gap-1.5 select-none touch-none overflow-hidden"
         >
-          {/* A. Time Ruler Bar (Interactive Scrubbing, Kapsul) */}
+          {/* A. Time Ruler Bar (Interactive Scrubbing) */}
           <div
             onPointerDown={handleRulerPointerDown}
-            className="relative h-[22px] bg-gradient-to-r from-zinc-900/90 via-zinc-800/80 to-zinc-900/90 hover:from-zinc-800/90 rounded-full overflow-hidden cursor-ew-resize transition-all shadow-inner px-2"
-            title="Klik atau geser di sini untuk scrub timeline"
+            className="relative h-[20px] bg-zinc-900/90 hover:bg-zinc-850 rounded-full overflow-hidden cursor-ew-resize transition-all px-2 select-none"
+            title="Ketuk atau geser di sini untuk scrub timeline"
           >
             {rulerTicks.map(({ sec, pct }) => (
               <div
                 key={sec}
-                className="absolute top-0 bottom-0 flex flex-col items-center -translate-x-1/2 pointer-events-none"
+                className="absolute top-0 bottom-0 flex flex-col items-center -translate-x-1/2 pointer-events-none select-none"
                 style={{ left: `${pct}%` }}
               >
-                <span className="text-[8px] font-mono font-medium text-zinc-400 leading-none pt-0.5">
+                <span className="text-[8px] font-mono text-zinc-400 leading-none pt-0.5">
                   {sec}s
                 </span>
-                <div className="w-[1px] h-1.5 bg-white/15 mt-auto" />
+                <div className="w-[1px] h-1 bg-white/10 mt-auto" />
               </div>
             ))}
           </div>
 
-          {/* B. Track Lanes (Kapsul dengan Gradasi Jelas) */}
+          {/* B. Track Lanes */}
           {isExpanded ? (
             timeline.layers.map((layer, index) => {
               const meta = getLayerMeta(layer.type, index);
@@ -371,12 +381,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                 <div
                   key={layer.id}
                   onPointerDown={handleTrackLanePointerDown}
-                  className="relative h-[38px] bg-gradient-to-r from-zinc-900/70 via-zinc-900/40 to-zinc-900/70 hover:from-zinc-800/50 rounded-full overflow-hidden cursor-crosshair transition-all px-1"
+                  className="relative h-8 bg-zinc-900/60 hover:bg-zinc-850/60 rounded-full overflow-hidden cursor-crosshair transition-all px-1 select-none"
                 >
-                  {/* Subtle ambient track background */}
-                  <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
-
-                  {/* Clips inside this layer (Kapsul Bulat, Gradasi Jelas, Tanpa Border) */}
+                  {/* Clips inside this layer */}
                   {layer.clips.map((clip) => {
                     const isDraggingThis =
                       activeClipDrag?.layerId === layer.id && activeClipDrag?.clipId === clip.id;
@@ -386,7 +393,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     const leftPercent = Math.min(100, Math.max(0, (clipFrom / totalFrames) * 100));
                     const widthPercent = Math.min(
                       100 - leftPercent,
-                      Math.max(3, (clipDuration / totalFrames) * 100)
+                      Math.max(4, (clipDuration / totalFrames) * 100)
                     );
                     const isSelected = clip.id === selectedClipId;
                     const clipSec = (clipDuration / timeline.fps).toFixed(1);
@@ -409,59 +416,48 @@ export const Timeline: React.FC<TimelineProps> = ({
                         } ${isSelected ? meta.clipSelectedBg : meta.clipBg}`}
                         title={`${clip.name} (${startSec}s - ${clipSec}s)`}
                       >
-                        {/* Trim handle LEFT (Kapsul Halus) */}
+                        {/* Trim handle LEFT (generous touch hit area) */}
                         <div
                           onPointerDown={(e) => handleClipPointerDown(e, layer, clip, 'trim-start')}
-                          className="w-2.5 h-full flex items-center justify-center cursor-ew-resize hover:bg-white/20 rounded-full transition-colors shrink-0 z-20 group"
+                          className="w-4 h-full flex items-center justify-center cursor-ew-resize hover:bg-white/20 rounded-full transition-colors shrink-0 z-30 group -ml-1"
+                          title="Tarik untuk memotong durasi awal"
                         >
-                          <div className={`w-[2px] h-3 rounded-full ${isSelected ? 'bg-white' : 'bg-white/40 group-hover:bg-white'}`} />
+                          <div className={`w-[2px] h-2.5 rounded-full ${isSelected ? 'bg-white' : 'bg-white/60 group-hover:bg-white'}`} />
                         </div>
-
-                        {/* Audio waveform visualization for narration & music */}
-                        {(layer.type === 'narration' || layer.type === 'music') && (
-                          <div className="absolute inset-0 opacity-20 flex items-center justify-around pointer-events-none px-3 overflow-hidden gap-[2px]">
-                            {[30, 65, 25, 80, 50, 95, 40, 70, 50, 85, 30, 60, 75, 45, 60, 80, 35, 70, 55, 90, 25, 65, 85, 45, 70, 35, 90, 60].map((h, i) => (
-                              <div
-                                key={i}
-                                className={`w-[2px] rounded-full shrink-0 ${layer.type === 'narration' ? 'bg-emerald-200' : 'bg-sky-200'}`}
-                                style={{ height: `${h}%` }}
-                              />
-                            ))}
-                          </div>
-                        )}
 
                         {/* Clip content: Icon + Title */}
                         <div className="flex items-center gap-1.5 min-w-0 pointer-events-none flex-1 truncate py-0.5">
                           <IconComponent className="w-3.5 h-3.5 shrink-0 text-white" />
-                          <span className="text-[11px] font-bold text-white truncate leading-tight drop-shadow-xs">
+                          <span className="text-xs font-bold text-white truncate leading-tight drop-shadow-xs">
                             {clip.name}
                           </span>
                         </div>
 
-                        {/* Duration pill (Kapsul Bulat) */}
+                        {/* Duration badge */}
                         <div className="shrink-0 pointer-events-none pr-0.5">
                           <span
-                            className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold shadow-xs ${
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold shadow-xs ${
                               isSelected
-                                ? 'bg-black/50 text-white'
-                                : 'bg-black/35 text-white/90'
+                                ? 'bg-black/60 text-white'
+                                : 'bg-black/40 text-white/95'
                             }`}
                           >
                             {clipSec}s
                           </span>
                         </div>
 
-                        {/* Trim handle RIGHT (Kapsul Halus) */}
+                        {/* Trim handle RIGHT (generous touch hit area) */}
                         <div
                           onPointerDown={(e) => handleClipPointerDown(e, layer, clip, 'trim-end')}
-                          className="w-2.5 h-full flex items-center justify-center cursor-ew-resize hover:bg-white/20 rounded-full transition-colors shrink-0 z-20 group"
+                          className="w-4 h-full flex items-center justify-center cursor-ew-resize hover:bg-white/20 rounded-full transition-colors shrink-0 z-30 group -mr-1"
+                          title="Tarik untuk memotong durasi akhir"
                         >
-                          <div className={`w-[2px] h-3 rounded-full ${isSelected ? 'bg-white' : 'bg-white/40 group-hover:bg-white'}`} />
+                          <div className={`w-[2px] h-2.5 rounded-full ${isSelected ? 'bg-white' : 'bg-white/60 group-hover:bg-white'}`} />
                         </div>
 
-                        {/* Live Floating Tooltip when this clip is actively being dragged */}
+                        {/* Live Floating Tooltip when dragged */}
                         {isDraggingThis && (
-                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gradient-to-r from-zinc-800 to-zinc-900 text-white shadow-2xl px-2.5 py-0.5 rounded-full text-[10px] font-mono whitespace-nowrap pointer-events-none z-50">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-zinc-900 text-white shadow-2xl px-2 py-0.5 rounded-full text-[9px] font-mono whitespace-nowrap pointer-events-none z-50 ring-1 ring-white/20">
                             {startSec}s • {clipSec}s
                           </div>
                         )}
@@ -472,15 +468,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               );
             })
           ) : (
-            // Compact single master lane view (32px high, Kapsul)
+            // Compact single master lane view
             <div
               onPointerDown={handleTrackLanePointerDown}
-              className="relative h-[32px] bg-gradient-to-r from-zinc-900/70 via-zinc-900/40 to-zinc-900/70 rounded-full overflow-hidden cursor-crosshair px-1"
+              className="relative h-7 bg-zinc-900/60 rounded-full overflow-hidden cursor-crosshair px-1"
             >
               {timeline.layers.flatMap((l, lIdx) =>
                 l.clips.map((clip) => {
                   const leftPercent = Math.min(100, Math.max(0, (clip.from / totalFrames) * 100));
-                  const widthPercent = Math.min(100 - leftPercent, Math.max(1.5, (clip.duration / totalFrames) * 100));
+                  const widthPercent = Math.min(100 - leftPercent, Math.max(2, (clip.duration / totalFrames) * 100));
                   const meta = getLayerMeta(l.type, lIdx);
                   const isSelected = clip.id === selectedClipId;
 
@@ -492,9 +488,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                         onSelectClip(clip, l);
                       }}
                       style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
-                      className={`absolute top-[3px] bottom-[3px] rounded-full px-2 flex items-center text-[9px] font-bold truncate transition-all cursor-pointer ${
+                      className={`absolute top-[2px] bottom-[2px] rounded-full px-1.5 flex items-center text-[8.5px] font-bold truncate transition-all cursor-pointer ${
                         isSelected
-                          ? 'ring-2 ring-white z-20 text-white ' + meta.clipSelectedBg
+                          ? 'ring-1 ring-white z-20 text-white ' + meta.clipSelectedBg
                           : 'opacity-90 text-white shadow-xs ' + meta.clipBg
                       }`}
                       title={`${clip.name} (${l.name})`}
@@ -507,34 +503,35 @@ export const Timeline: React.FC<TimelineProps> = ({
             </div>
           )}
 
-          {/* C. Playhead Needle & Vertical Scrub Line */}
+          {/* C. Playhead Needle & Vertical Line */}
+          {/* CRITICAL: Needle body has pointer-events-none so it NEVER blocks touching clips underneath! */}
           <div
             className={`absolute top-0 bottom-0 z-40 -translate-x-1/2 pointer-events-none ${
               isScrubbingPlayhead ? 'transition-none' : 'transition-transform duration-75'
             }`}
             style={{ left: `${playheadPercent}%` }}
           >
-            {/* Interactive needle handle top */}
+            {/* ONLY the top handle head has pointer-events-auto */}
             <div
               onPointerDown={handlePlayheadPointerDown}
-              className="pointer-events-auto cursor-ew-resize touch-none flex flex-col items-center group -mt-1 active:scale-110 transition-transform h-full"
-              title="Tahan & geser penanda tracking ini untuk memutar video"
+              className="pointer-events-auto cursor-ew-resize touch-none flex flex-col items-center -mt-0.5 active:scale-125 transition-transform"
+              title="Tahan & geser penanda waktu ini"
             >
               {/* Tooltip during active scrub */}
               {isScrubbingPlayhead && (
-                <div className="absolute -top-7 bg-[#e5484d] text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg whitespace-nowrap pointer-events-none">
-                  {((currentFrame) / timeline.fps).toFixed(2)}s (F{currentFrame})
+                <div className="absolute -top-6 bg-red-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-lg whitespace-nowrap pointer-events-none">
+                  {((currentFrame) / timeline.fps).toFixed(2)}s
                 </div>
               )}
 
-              {/* Needle Head Button */}
-              <div className="w-4 h-4 bg-white rounded-full shadow-md shadow-black/50 flex items-center justify-center shrink-0">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+              {/* Needle Head Circle Button */}
+              <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md shadow-black/80 flex items-center justify-center shrink-0">
+                <div className="w-1.5 h-1.5 bg-red-600 rounded-full" />
               </div>
-
-              {/* Vertical scrub line spanning through all tracks */}
-              <div className="w-[2px] flex-1 min-h-[120px] bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] pointer-events-none" />
             </div>
+
+            {/* Vertical needle line running down through tracks (STRICTLY pointer-events-none) */}
+            <div className="w-[1.5px] h-full bg-white/90 shadow-[0_0_6px_rgba(255,255,255,0.7)] pointer-events-none mx-auto -mt-1" />
           </div>
         </div>
       </div>
