@@ -480,8 +480,24 @@ export function useStudioState() {
 
         // Replace streaming message with final message
         if (streamingMsgRef.current) {
+          // Preserve any accumulated streaming content if the final message is empty
+          const finalContent = assistantMsg.content || assistantMsg.text || '';
           setMessages((prev) =>
-            prev.map((m) => (m.id === streamingMsgRef.current ? assistantMsg : m))
+            prev.map((m) => {
+              if (m.id === streamingMsgRef.current) {
+                // Keep streaming content if final message has no content
+                return {
+                  ...m,
+                  content: finalContent || m.content,
+                  text: finalContent || m.text,
+                  status: assistantMsg.status || 'completed',
+                  toolCalls: assistantMsg.toolCalls,
+                  checkpointHash: assistantMsg.checkpointHash,
+                  canRevert: assistantMsg.canRevert,
+                };
+              }
+              return m;
+            })
           );
           streamingMsgRef.current = null;
         } else {
@@ -493,8 +509,25 @@ export function useStudioState() {
             return [...prev, assistantMsg];
           });
         }
-        setAgentStatus('idle');
+
+        // Update agent status based on result
+        if (assistantMsg.status === 'failed' || assistantMsg.status === 'error') {
+          setAgentStatus('idle');
+        } else {
+          setAgentStatus('idle');
+        }
       } catch (err) {
+        // Preserve any streaming content that was already received
+        if (streamingMsgRef.current) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingMsgRef.current
+                ? { ...m, status: 'failed', content: m.content || '❌ Gagal memproses permintaan', text: m.text || '❌ Gagal memproses permintaan' }
+                : m
+            )
+          );
+          streamingMsgRef.current = null;
+        }
         setAgentStatus('idle');
       }
     },

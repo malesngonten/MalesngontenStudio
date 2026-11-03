@@ -32,9 +32,13 @@ export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  text?: string;
   timestamp: string;
+  status?: 'idle' | 'thinking' | 'streaming' | 'completed' | 'failed' | 'error' | 'cancelled';
   attachments?: AgentAttachment[];
   toolCalls?: AgentToolCall[];
+  checkpointHash?: string;
+  canRevert?: boolean;
   context?: {
     playheadSec?: number;
     playheadFrame?: number;

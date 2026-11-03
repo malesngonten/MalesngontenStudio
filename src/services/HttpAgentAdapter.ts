@@ -124,45 +124,69 @@ export class HttpAgentAdapter implements IAgentClient {
   ): Promise<AgentMessage> {
     this.status = 'thinking';
     let streamingAccumulated = '';
+    let currentMsgId = '';
 
     try {
       // Register listener for tool calls, text chunks & completion
       const pendingPromise = new Promise<AgentMessage>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error('Koneksi timeout (melebihi 40 detik) saat menunggu respons dari agent.'));
-        }, 40000);
-
         const handleComplete = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
-            clearTimeout(timer);
+            const msg = data.message || data;
+            const status = msg.status || 'completed';
             if (this.eventSource) {
               this.eventSource.removeEventListener('message_complete', handleComplete);
             }
+
+            if (status === 'failed' || status === 'error') {
+              this.status = 'idle';
+              reject(new Error(msg.content || msg.text || 'AI provider error'));
+              return;
+            }
+
             this.status = 'idle';
             resolve({
-              id: data.message.id,
+              id: msg.id,
               role: 'assistant',
-              content: data.message.content || data.message.text,
-              timestamp: data.message.timestamp,
-              toolCalls: data.message.toolCalls,
+              content: msg.content || msg.text || streamingAccumulated,
+              text: msg.text || msg.content || streamingAccumulated,
+              timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              toolCalls: msg.toolCalls,
+              checkpointHash: msg.checkpointHash,
+              canRevert: msg.canRevert,
+              status: msg.status,
             });
           } catch (err) {
             reject(err);
           }
         };
 
+        const handleCancelled = (e: MessageEvent) => {
+          try {
+            if (this.eventSource) {
+              this.eventSource.removeEventListener('agent_cancelled', handleCancelled);
+            }
+            this.status = 'idle';
+            reject(new Error('Dibatalkan oleh pengguna'));
+          } catch {
+            reject(new Error('Dibatalkan oleh pengguna'));
+          }
+        };
+
         if (this.eventSource) {
           this.eventSource.addEventListener('message_complete', handleComplete);
+          this.eventSource.addEventListener('agent_cancelled', handleCancelled);
         }
 
         this.onTextChunkCallback = (msgId, chunk) => {
+          currentMsgId = msgId;
           streamingAccumulated += chunk;
           if (onUpdate) {
             onUpdate({
               id: msgId,
               role: 'assistant',
               content: streamingAccumulated,
+              text: streamingAccumulated,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             });
           }
@@ -175,6 +199,7 @@ export class HttpAgentAdapter implements IAgentClient {
                 id: msgId,
                 role: 'assistant',
                 content: streamingAccumulated,
+                text: streamingAccumulated,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               },
               toolCall
@@ -218,6 +243,7 @@ export class HttpAgentAdapter implements IAgentClient {
         id: `err-${Date.now()}`,
         role: 'assistant',
         content: `❌ Gagal memproses permintaan: ${err?.message || 'Server tidak dapat dihubungi'}`,
+        text: `❌ Gagal memproses permintaan: ${err?.message || 'Server tidak dapat dihubungi'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       if (onUpdate) onUpdate(errMsg);

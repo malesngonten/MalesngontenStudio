@@ -938,11 +938,6 @@ app.post('/api/agent/prompt', async (req, res) => {
     text: '',
     timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     toolCalls: [],
-    plan: [
-      { id: 'step-1', title: 'Baca struktur timeline.json & aturan video', completed: false },
-      { id: 'step-2', title: 'Terapkan perubahan layer & gaya video', completed: false },
-      { id: 'step-3', title: 'Buat checkpoint Git otomatis', completed: false },
-    ],
   };
   currentSession.messages.push(aiMessage);
 
@@ -953,7 +948,7 @@ app.post('/api/agent/prompt', async (req, res) => {
     try {
       activeCancellationController = new AbortController();
 
-      // Read current timeline & rules from real workspace
+      // Read current timeline for context (read-only, no tool call broadcast unless editing)
       let currentTimelineData: any;
       try {
         currentTimelineData = JSON.parse(fs.readFileSync(timelinePath, 'utf-8'));
@@ -961,34 +956,9 @@ app.post('/api/agent/prompt', async (req, res) => {
         currentTimelineData = DEFAULT_TIMELINE;
       }
 
-      // Tool call 1: Read Project Files
-      agentStatus = 'executing_tool';
-      broadcastSSE('agent_status', { status: 'executing_tool' });
-
-      const tool1: any = {
-        id: 'tc-read-' + Date.now(),
-        toolName: 'readFile',
-        description: 'Membaca timeline.json dari workspace proyek lokal',
-        arguments: { path: 'timeline.json' },
-        target: 'timeline.json',
-        status: 'running',
-        timestamp: new Date().toISOString(),
-      };
-      aiMessage.toolCalls.push(tool1);
-      broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool1 });
-
-      await new Promise((r) => setTimeout(r, 350));
-      tool1.status = 'completed';
-      tool1.durationMs = 210;
-      tool1.result = `Berhasil membaca timeline: ${currentTimelineData.layers.length} layer, ${currentTimelineData.durationInFrames} frame.`;
-      aiMessage.plan[0].completed = true;
-      broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool1 });
-      broadcastSSE('plan_update', { messageId: aiMsgId, plan: aiMessage.plan });
-
-      // Determine editing actions based on user prompt
-      let modificationSummary = '';
-      let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
       let aiRawResponse = '';
+      let editingMode = false;
+      let timelineChanges: any = null;
 
       // Helper: broadcast an AI text chunk to SSE clients in real time
       const streamAiChunk = (chunk: string) => {
@@ -998,7 +968,35 @@ app.post('/api/agent/prompt', async (req, res) => {
         broadcastSSE('text_chunk', { messageId: aiMsgId, chunk, accumulated: aiRawResponse });
       };
 
-      // 1. OpenAI-Compatible API (BYOK) - Flexible for any provider (OpenRouter, Groq, DeepSeek, OpenAI, Ollama, etc.)
+      // Dual-mode system prompt:
+      // - CHAT mode: greetings/general questions → plain text response, no tools, no timeline change
+      // - EDIT mode: video modification requests → JSON with timeline changes
+      const systemPrompt = `You are the AI assistant for Males Ngonten Studio, a short video editor for TikTok/Reels/Shorts.
+
+You have TWO modes:
+
+1. CHAT MODE - For greetings (halo, hai, etc.), general questions, casual conversation:
+   - Respond naturally in Indonesian
+   - Do NOT use JSON
+   - Do NOT mention tools, timeline, or git
+   - Just be a helpful, friendly assistant
+
+2. EDIT MODE - When the user explicitly asks to modify the video timeline (change text, animation, duration, add/remove layers, change colors, etc.):
+   - Respond with ONLY valid JSON matching this schema:
+   {
+     "summary": "Short explanation in Indonesian (1-2 sentences)",
+     "timeline": <complete updated timeline object>
+   }
+
+Decide the mode based on the user's message. If they say "hallo", "hai", or just chat, use CHAT MODE. If they ask to change video elements, use EDIT MODE.
+
+Current timeline:
+${JSON.stringify(currentTimelineData, null, 2)}
+
+User request:
+"${text}"`;
+
+      // 1. OpenAI-Compatible API (BYOK)
       const activeByok = byok || context?.byok;
       const hasByok = Boolean(activeByok?.baseUrl && activeByok?.modelId);
 
@@ -1019,33 +1017,14 @@ app.post('/api/agent/prompt', async (req, res) => {
             headers['Authorization'] = `Bearer ${activeByok.apiKey.trim()}`;
           }
 
-          const promptPayload = `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
-The user wants to modify their Remotion video project.
-
-Current timeline JSON:
-${JSON.stringify(currentTimelineData, null, 2)}
-
-User request:
-"${text}"
-
-Project Rules:
-${DEFAULT_GEMINI_RULES}
-
-Modify the timeline accordingly (layers, clips, texts, animations, audio).
-Return ONLY valid JSON matching this schema:
-{
-  "summary": "Short explanation in Indonesian of what was changed (1-2 sentences)",
-  "timeline": <complete updated timeline object matching the input structure>
-}`;
-
           const aiResponse = await fetch(targetUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify({
               model: activeByok.modelId.trim(),
               messages: [
-                { role: 'system', content: 'You are an expert Remotion video coding AI. You respond with pure JSON only.' },
-                { role: 'user', content: promptPayload },
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: text },
               ],
               temperature: 0.2,
               stream: true,
@@ -1104,21 +1083,20 @@ Return ONLY valid JSON matching this schema:
               } catch {}
             }
 
-            const cleaned = aiRawResponse
-              .replace(/^```json/im, '')
-              .replace(/^```/im, '')
-              .replace(/```$/m, '')
-              .trim();
+            // Try to parse as JSON for EDIT mode
             try {
+              const cleaned = aiRawResponse
+                .replace(/^```json/im, '')
+                .replace(/^```/im, '')
+                .replace(/```$/m, '')
+                .trim();
               const parsed = JSON.parse(cleaned);
               if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
-                updatedTimeline = parsed.timeline;
-                modificationSummary = parsed.summary || `Memperbarui timeline via model ${activeByok.modelId}.`;
-              } else {
-                providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
+                editingMode = true;
+                timelineChanges = parsed;
               }
             } catch {
-              providerError = 'Gagal mem-parse respons JSON dari AI provider.';
+              // Not JSON - that's fine, it's CHAT mode
             }
           } else {
             let errText = '';
@@ -1134,30 +1112,13 @@ Return ONLY valid JSON matching this schema:
           providerError = byokErr?.message || 'Gagal menghubungi server AI provider';
         }
       } else if (!hasByok && geminiClient && text) {
-        // Optional server-side Gemini fallback only if GEMINI_API_KEY environment variable is present and no BYOK is provided
+        // Optional server-side Gemini fallback
         try {
           const aiResponse = await geminiClient.models.generateContentStream({
             model: 'gemini-3.8-flash',
-            contents: `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
-The user wants to modify their Remotion video project.
-
-Current timeline JSON:
-${JSON.stringify(currentTimelineData, null, 2)}
-
-User request:
-"${text}"
-
-Project Rules:
-${DEFAULT_GEMINI_RULES}
-
-Modify the timeline accordingly (layers, clips, texts, animations, audio).
-Return ONLY valid JSON matching this schema:
-{
-  "summary": "Short explanation in Indonesian of what was changed (1-2 sentences)",
-  "timeline": <complete updated timeline object matching the input structure>
-}`,
+            contents: systemPrompt + '\n\nUser request:\n' + text,
             config: {
-              responseMimeType: 'application/json',
+              temperature: 0.2,
             },
           });
 
@@ -1171,6 +1132,7 @@ Return ONLY valid JSON matching this schema:
             }
           }
 
+          // Try to parse as JSON for EDIT mode
           try {
             const cleaned = aiRawResponse
               .replace(/^```json/im, '')
@@ -1179,28 +1141,23 @@ Return ONLY valid JSON matching this schema:
               .trim();
             const parsed = JSON.parse(cleaned);
             if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
-              updatedTimeline = parsed.timeline;
-              modificationSummary = parsed.summary || 'Memperbarui timeline video sesuai instruksi AI.';
-            } else {
-              providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
+              editingMode = true;
+              timelineChanges = parsed;
             }
           } catch {
-            providerError = 'Gagal mem-parse respons JSON dari Gemini.';
+            // Not JSON - CHAT mode
           }
         } catch (geminiErr: any) {
           providerError = `Gemini API Error: ${geminiErr?.message || geminiErr}`;
         }
       }
 
-      // If no provider configured or provider failed: NEVER fake a successful response!
+      // If no provider configured: NEVER fake a successful response
       if (!hasByok && !geminiClient) {
-        const warningMsg = '⚠️ **Provider AI Belum Terhubung**\n\nMales Ngonten Studio memerlukan koneksi ke AI provider aktif (BYOK OpenAI-Compatible atau Google Gemini). Silakan buka menu **Pengaturan (⚙️)** di bilah navigasi bawah untuk mengatur API Base URL, API Key, dan Model ID pilihan Anda (misalnya OpenRouter, Groq, DeepSeek, OpenAI, Ollama, dll).';
+        const warningMsg = '⚠️ **Provider AI Belum Terhubung**\n\nMales Ngonten Studio memerlukan koneksi ke AI provider aktif (BYOK OpenAI-Compatible atau Google Gemini). Silakan buka menu **Pengaturan (⚙️)** di bilah navigasi bawah untuk mengatur API Base URL, API Key, dan Model ID pilihan Anda.';
         aiMessage.content = warningMsg;
         aiMessage.text = warningMsg;
         aiMessage.status = 'error';
-        aiMessage.plan[1].title = 'Koneksi AI tidak dikonfigurasi';
-        aiMessage.plan[1].completed = false;
-        aiMessage.plan[2].completed = false;
         broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
         const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
         fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
@@ -1208,72 +1165,59 @@ Return ONLY valid JSON matching this schema:
       }
 
       if (providerError) {
-        const errorMsg = `❌ **Gagal Memproses Permintaan via AI**\n\n${providerError}\n\nSilakan periksa kembali API Base URL, API Key, atau kuota Model ID Anda pada menu **Pengaturan (⚙️)**.`;
+        const errorMsg = `❌ **Gagal Memproses Permintaan via AI**\n\n${providerError}`;
         aiMessage.content = errorMsg;
         aiMessage.text = errorMsg;
         aiMessage.status = 'error';
-        aiMessage.plan[1].title = 'Gagal memproses via AI';
-        aiMessage.plan[1].completed = false;
-        aiMessage.plan[2].completed = false;
         broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
         const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
         fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
         return;
       }
 
+      // If EDIT mode: apply timeline changes, create git checkpoint
+      if (editingMode && timelineChanges) {
+        agentStatus = 'executing_tool';
+        broadcastSSE('agent_status', { status: 'executing_tool' });
 
-      // Tool call 2: Write timeline.json to real disk
-      const tool2: any = {
-        id: 'tc-write-' + Date.now(),
-        toolName: 'writeFile',
-        description: 'Menulis perubahan ke timeline.json di storage lokal',
-        arguments: { path: 'timeline.json', bytes: JSON.stringify(updatedTimeline).length },
-        target: 'timeline.json',
-        status: 'running',
-        timestamp: new Date().toISOString(),
-      };
-      aiMessage.toolCalls.push(tool2);
-      broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
+        const tool2: any = {
+          id: 'tc-write-' + Date.now(),
+          toolName: 'writeFile',
+          description: 'Menulis perubahan ke timeline.json di storage lokal',
+          arguments: { path: 'timeline.json', bytes: JSON.stringify(timelineChanges.timeline).length },
+          target: 'timeline.json',
+          status: 'running',
+          timestamp: new Date().toISOString(),
+        };
+        aiMessage.toolCalls.push(tool2);
+        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
 
-      await new Promise((r) => setTimeout(r, 450));
+        // Persist to actual filesystem
+        fs.writeFileSync(timelinePath, JSON.stringify(timelineChanges.timeline, null, 2), 'utf-8');
+        tool2.status = 'completed';
+        tool2.durationMs = 380;
+        tool2.result = 'File timeline.json berhasil diperbarui di filesystem lokal.';
+        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
 
-      // Persist to actual filesystem
-      fs.writeFileSync(timelinePath, JSON.stringify(updatedTimeline, null, 2), 'utf-8');
-      tool2.status = 'completed';
-      tool2.durationMs = 380;
-      tool2.result = 'File timeline.json berhasil diperbarui di filesystem lokal.';
-      aiMessage.plan[1].completed = true;
-      broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
-      broadcastSSE('plan_update', { messageId: aiMsgId, plan: aiMessage.plan });
+        // Broadcast file change to reload Player realtime
+        broadcastSSE('file_changed', { file: 'timeline.json', timeline: timelineChanges.timeline });
 
-      // Broadcast file change to reload Player realtime
-      broadcastSSE('file_changed', { file: 'timeline.json', timeline: updatedTimeline });
+        // Git Checkpoint (REAL git)
+        const commitMsg = timelineChanges.summary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
+        const newHash = createGitCheckpoint(commitMsg, timelineChanges.timeline);
+        const newShortHash = newHash.slice(0, 7);
 
-      // Tool call 3: Git Checkpoint (REAL git, not in-memory simulation)
-      const commitMsg = modificationSummary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
-      const newHash = createGitCheckpoint(commitMsg, updatedTimeline);
-      const newShortHash = newHash.slice(0, 7);
-
-      aiMessage.checkpointHash = newHash;
-      aiMessage.canRevert = true;
-      aiMessage.plan[2].completed = true;
-
-      // Stream final reply text via SSE text_chunk events
-      agentStatus = 'streaming';
-      broadcastSSE('agent_status', { status: 'streaming' });
-
-      const finalReply = `Perubahan video berhasil diterapkan ke workspace lokal!\n\n- **Aksi**: ${modificationSummary}\n- **Protokol**: ACP Tool Execution (\`readFile\` -> \`writeFile\`)\n- **Git Checkpoint**: \`#${newShortHash}\`\n- **Remotion Player**: Preview ter-update otomatis secara realtime.\n\nAnda dapat melihat perubahannya langsung pada Player di atas atau mengecek tab Code & Timeline.`;
-
-      // Stream final reply text as text_chunk events for UI typing effect
-      const chunkSize = 40;
-      for (let i = 0; i < finalReply.length; i += chunkSize) {
-        const chunk = finalReply.slice(i, i + chunkSize);
-        streamAiChunk(chunk);
-        await new Promise((r) => setTimeout(r, 30));
+        aiMessage.checkpointHash = newHash;
+        aiMessage.canRevert = true;
       }
 
-      aiMessage.content = finalReply;
-      aiMessage.text = finalReply;
+      // Mark as completed - streaming is done, provider finished successfully
+      aiMessage.status = 'completed';
+      aiMessage.content = aiRawResponse;
+      aiMessage.text = aiRawResponse;
+
+      agentStatus = 'streaming';
+      broadcastSSE('agent_status', { status: 'streaming' });
 
       broadcastSSE('message_complete', {
         messageId: aiMsgId,
@@ -1286,6 +1230,7 @@ Return ONLY valid JSON matching this schema:
     } catch (err: any) {
       aiMessage.text = `Terjadi kesalahan saat memproses permintaan: ${err?.message || err}`;
       aiMessage.content = aiMessage.text;
+      aiMessage.status = 'failed';
       broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
     } finally {
       agentStatus = 'idle';
