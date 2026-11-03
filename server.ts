@@ -963,11 +963,24 @@ Return ONLY valid JSON matching this schema:
       aiMessage.canRevert = true;
       aiMessage.plan[2].completed = true;
 
-      // Stream final reply text
+      // Stream final reply text via SSE text_chunk events
       agentStatus = 'streaming';
       broadcastSSE('agent_status', { status: 'streaming' });
 
       const finalReply = `Perubahan video berhasil diterapkan ke workspace lokal!\n\n- **Aksi**: ${modificationSummary}\n- **Protokol**: ACP Tool Execution (\`readFile\` -> \`writeFile\`)\n- **Git Checkpoint**: \`#${newShortHash}\`\n- **Remotion Player**: Preview ter-update otomatis secara realtime.\n\nAnda dapat melihat perubahannya langsung pada Player di atas atau mengecek tab Code & Timeline.`;
+
+      // Stream reply in small chunks so the UI can render incremental text
+      const chunkSize = 40;
+      let accumulated = '';
+      for (let i = 0; i < finalReply.length; i += chunkSize) {
+        const chunk = finalReply.slice(i, i + chunkSize);
+        accumulated += chunk;
+        aiMessage.content = accumulated;
+        aiMessage.text = accumulated;
+        broadcastSSE('text_chunk', { messageId: aiMsgId, chunk, accumulated });
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
       aiMessage.content = finalReply;
       aiMessage.text = finalReply;
 
@@ -1207,7 +1220,7 @@ app.post('/api/render', (req, res) => {
     totalFrames: 150,
     estimatedSecondsRemaining: 8,
     fileName,
-    fileSize: resolution === '4K' ? 14200000 : resolution === '1080p' ? 8400000 : 3800000,
+    fileSize: undefined,
     createdAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
   };
 
@@ -1271,7 +1284,12 @@ app.post('/api/render', (req, res) => {
       if (newJob.status !== 'completed' && newJob.status !== 'cancelled') {
         if (code === 0 && fs.existsSync(targetVideoPath)) {
           newJob.status = 'completed';
+          newJob.progress = 100;
           newJob.downloadUrl = `/api/renders/${jobId}/download`;
+          try {
+            const stats = fs.statSync(targetVideoPath);
+            newJob.fileSize = stats.size;
+          } catch {}
           broadcastSSE('render_completed', { job: newJob });
         } else {
           newJob.status = 'failed';
@@ -1336,11 +1354,7 @@ app.get('/api/renders/:id/download', (req, res) => {
     return res.download(targetFile, job?.fileName || 'males_ngonten_video.mp4');
   }
 
-  // Fallback MP4 buffer
-  const dummyBuffer = Buffer.alloc(1024 * 100);
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Content-Disposition', `attachment; filename="${job?.fileName || 'males_ngonten_video.mp4'}"`);
-  res.send(dummyBuffer);
+  return res.status(404).json({ error: 'Render file not found' });
 });
 
 app.delete('/api/renders/:id', (req, res) => {
