@@ -230,6 +230,7 @@ export function useStudioState() {
 
   // Sync timeline changes to backend and localStorage
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const streamingMsgRef = useRef<string | null>(null);
   const syncTimelineToWorkspace = useCallback((newTimeline: TimelineData) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
@@ -418,6 +419,7 @@ export function useStudioState() {
       if (!text.trim() && attachments.length === 0) return;
 
       setAgentStatus('thinking');
+      streamingMsgRef.current = null;
       const tempUserMsg: AgentMessage = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         role: 'user',
@@ -455,16 +457,42 @@ export function useStudioState() {
                 return [...filtered, toolCall];
               });
             }
+            // Incremental text streaming from AI provider
+            if (partialMsg && partialMsg.content) {
+              if (!streamingMsgRef.current) {
+                streamingMsgRef.current = partialMsg.id;
+                setMessages((prev) => {
+                  const filtered = prev.filter((m) => m.id !== partialMsg.id);
+                  return [...filtered, partialMsg];
+                });
+              } else {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === streamingMsgRef.current
+                      ? { ...m, content: partialMsg.content, text: partialMsg.content }
+                      : m
+                  )
+                );
+              }
+            }
           }
         );
 
-        setMessages((prev) => {
-          const exists = prev.some((m) => m.id === assistantMsg.id);
-          if (exists) {
-            return prev.map((m) => (m.id === assistantMsg.id ? assistantMsg : m));
-          }
-          return [...prev, assistantMsg];
-        });
+        // Replace streaming message with final message
+        if (streamingMsgRef.current) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === streamingMsgRef.current ? assistantMsg : m))
+          );
+          streamingMsgRef.current = null;
+        } else {
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === assistantMsg.id);
+            if (exists) {
+              return prev.map((m) => (m.id === assistantMsg.id ? assistantMsg : m));
+            }
+            return [...prev, assistantMsg];
+          });
+        }
         setAgentStatus('idle');
       } catch (err) {
         setAgentStatus('idle');

@@ -35,14 +35,208 @@ const ACTIVE_PROJECT_DIR = path.join(PROJECTS_BASE, 'proyek-remotion-1');
 const OUT_DIR = path.join(WORKSPACE_DIR, 'out');
 const ASSETS_DIR = path.join(ACTIVE_PROJECT_DIR, 'public', 'assets');
 const CHATS_DIR = path.join(ACTIVE_PROJECT_DIR, '.males_ngonten', 'chats');
+const CHECKPOINTS_DIR = path.join(ACTIVE_PROJECT_DIR, '.males_ngonten', 'checkpoints');
+const CHECKPOINTS_INDEX_PATH = path.join(CHECKPOINTS_DIR, 'index.json');
 const SCRIPTS_DIR = path.join(WORKSPACE_DIR, 'scripts');
 
 // Ensure base project directories exist
-[PROJECTS_BASE, ACTIVE_PROJECT_DIR, OUT_DIR, ASSETS_DIR, CHATS_DIR, path.join(ACTIVE_PROJECT_DIR, 'src'), SCRIPTS_DIR].forEach((dir) => {
+[PROJECTS_BASE, ACTIVE_PROJECT_DIR, OUT_DIR, ASSETS_DIR, CHATS_DIR, CHECKPOINTS_DIR, path.join(ACTIVE_PROJECT_DIR, 'src'), SCRIPTS_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
+
+// Initialize git repo for real checkpoints
+function ensureGitRepo() {
+  const gitDir = path.join(ACTIVE_PROJECT_DIR, '.git');
+  if (!fs.existsSync(gitDir)) {
+    const initResult = spawnSync('git', ['init'], { cwd: ACTIVE_PROJECT_DIR, encoding: 'utf-8' });
+    if (initResult.status === 0) {
+      console.log('[Git] Repository diinisialisasi di', ACTIVE_PROJECT_DIR);
+    } else {
+      console.warn('[Git] Gagal inisialisasi repo:', initResult.stderr || initResult.stdout);
+    }
+  }
+  // Set safe.directory for git in proot/Termux
+  spawnSync('git', ['config', '--global', '--add', 'safe.directory', ACTIVE_PROJECT_DIR], { encoding: 'utf-8' });
+  spawnSync('git', ['config', 'user.name', 'Males Ngonten Agent'], { cwd: ACTIVE_PROJECT_DIR, encoding: 'utf-8' });
+  spawnSync('git', ['config', 'user.email', 'agent@malesngonten.studio'], { cwd: ACTIVE_PROJECT_DIR, encoding: 'utf-8' });
+}
+
+ensureGitRepo();
+
+// Load checkpoints from index on startup
+let gitCheckpoints: {
+  hash: string;
+  shortHash: string;
+  message: string;
+  timestamp: string;
+  author: string;
+  isActive: boolean;
+  timelineSnapshot: string;
+}[] = [];
+
+function loadCheckpointsFromIndex() {
+  try {
+    if (fs.existsSync(CHECKPOINTS_INDEX_PATH)) {
+      const index = JSON.parse(fs.readFileSync(CHECKPOINTS_INDEX_PATH, 'utf-8'));
+      if (Array.isArray(index)) {
+        gitCheckpoints = index;
+        // Ensure exactly one active checkpoint
+        const active = gitCheckpoints.filter((c) => c.isActive);
+        if (active.length === 0 && gitCheckpoints.length > 0) {
+          gitCheckpoints[0].isActive = true;
+        } else if (active.length > 1) {
+          gitCheckpoints.forEach((c, i) => (c.isActive = i === 0));
+        }
+      }
+    }
+  } catch {}
+  // If no checkpoints exist yet, create initial commit
+  if (gitCheckpoints.length === 0) {
+    const initialTimeline = JSON.stringify(DEFAULT_TIMELINE, null, 2);
+    const initialHash = createGitCheckpoint('Initial project scaffold with default Remotion timeline', DEFAULT_TIMELINE, true);
+    gitCheckpoints = gitCheckpoints.filter((c) => c.hash !== initialHash);
+    gitCheckpoints.unshift({
+      hash: initialHash,
+      shortHash: initialHash.slice(0, 7),
+      message: 'Initial project scaffold with default Remotion timeline',
+      timestamp: 'Baru saja',
+      author: 'Males Ngonten Agent',
+      isActive: true,
+      timelineSnapshot: initialTimeline,
+    });
+    saveCheckpointsIndex();
+  }
+}
+
+// Save checkpoints index to disk
+function saveCheckpointsIndex() {
+  try {
+    fs.writeFileSync(CHECKPOINTS_INDEX_PATH, JSON.stringify(gitCheckpoints, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Git] Gagal menyimpan index checkpoint:', err);
+  }
+}
+
+// Create a real git checkpoint commit
+function createGitCheckpoint(message: string, timeline: any, forceInitial = false): string {
+  try {
+    // Write timeline.json to disk first
+    fs.writeFileSync(timelinePath, JSON.stringify(timeline, null, 2), 'utf-8');
+
+    // Stage and commit
+    const addResult = spawnSync('git', ['add', 'timeline.json'], { cwd: ACTIVE_PROJECT_DIR, encoding: 'utf-8' });
+    if (addResult.status !== 0 && !forceInitial) {
+      throw new Error(`git add gagal: ${addResult.stderr || addResult.stdout}`);
+    }
+
+    const commitResult = spawnSync('git', ['commit', '-m', message, '--quiet'], {
+      cwd: ACTIVE_PROJECT_DIR,
+      encoding: 'utf-8',
+    });
+    if (commitResult.status !== 0 && !forceInitial) {
+      throw new Error(`git commit gagal: ${commitResult.stderr || commitResult.stdout}`);
+    }
+
+    // Get the commit hash
+    const hashResult = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ACTIVE_PROJECT_DIR, encoding: 'utf-8' });
+    const hash = hashResult.stdout.trim() || `chk-${Date.now()}`;
+
+    return hash;
+  } catch (err: any) {
+    console.warn('[Git] Gagal membuat checkpoint:', err.message);
+    // Fallback: generate a hash but don't pretend git worked
+    return `chk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+// Get all checkpoints from real git log + index
+function getGitCheckpoints() {
+  return gitCheckpoints;
+}
+
+// Get diff between current timeline and a checkpoint
+function getGitCheckpointDiff(hash: string) {
+  const targetVersion = gitCheckpoints.find((v) => v.hash === hash);
+  if (!targetVersion) return null;
+
+  try {
+    // Try to get original content from git
+    const showResult = spawnSync('git', ['show', `${hash}:timeline.json`], {
+      cwd: ACTIVE_PROJECT_DIR,
+      encoding: 'utf-8',
+    });
+    const originalContent = showResult.status === 0 ? showResult.stdout : targetVersion.timelineSnapshot;
+    const newContent = fs.readFileSync(timelinePath, 'utf-8');
+
+    return {
+      hash,
+      message: targetVersion.message,
+      diff: {
+        filePath: 'timeline.json',
+        originalContent,
+        newContent,
+      },
+    };
+  } catch {
+    return {
+      hash,
+      message: targetVersion.message,
+      diff: {
+        filePath: 'timeline.json',
+        originalContent: targetVersion.timelineSnapshot,
+        newContent: fs.readFileSync(timelinePath, 'utf-8'),
+      },
+    };
+  }
+}
+
+// Restore timeline from a git checkpoint
+function restoreGitCheckpoint(hash: string) {
+  const targetVersion = gitCheckpoints.find((v) => v.hash === hash);
+  if (!targetVersion) return null;
+
+  try {
+    // Restore from git
+    const checkoutResult = spawnSync('git', ['checkout', hash, '--', 'timeline.json'], {
+      cwd: ACTIVE_PROJECT_DIR,
+      encoding: 'utf-8',
+    });
+
+    let restoredTimelineJson: string;
+    if (checkoutResult.status === 0) {
+      restoredTimelineJson = fs.readFileSync(timelinePath, 'utf-8');
+    } else {
+      // Fallback to index snapshot
+      restoredTimelineJson = targetVersion.timelineSnapshot;
+      fs.writeFileSync(timelinePath, restoredTimelineJson, 'utf-8');
+    }
+
+    const parsed = JSON.parse(restoredTimelineJson);
+
+    // Create a restore checkpoint
+    const restoreHash = `rst-${Date.now()}`;
+    gitCheckpoints.forEach((c) => (c.isActive = false));
+    gitCheckpoints.unshift({
+      hash: restoreHash,
+      shortHash: restoreHash.slice(0, 7),
+      message: `Restore ke checkpoint #${targetVersion.shortHash}: ${targetVersion.message}`,
+      timestamp: 'Baru saja',
+      author: 'Males Ngonten Agent',
+      isActive: true,
+      timelineSnapshot: restoredTimelineJson,
+    });
+    saveCheckpointsIndex();
+
+    broadcastSSE('file_changed', { file: 'timeline.json', timeline: parsed });
+
+    return { success: true, newHash: restoreHash, timeline: parsed };
+  } catch (err: any) {
+    console.warn('[Git] Gagal memulihkan checkpoint:', err.message);
+    return null;
+  }
+}
 
 // Default timeline.json
 const DEFAULT_TIMELINE = {
@@ -241,26 +435,8 @@ if (!fs.existsSync(compPath)) {
   fs.writeFileSync(compPath, DEFAULT_COMPOSITION, 'utf-8');
 }
 
-// In-memory Git Checkpoint state
-let gitCheckpoints: {
-  hash: string;
-  shortHash: string;
-  message: string;
-  timestamp: string;
-  author: string;
-  isActive: boolean;
-  timelineSnapshot: string;
-}[] = [
-  {
-    hash: 'chk-init-001',
-    shortHash: 'init001',
-    message: 'Initial project scaffold with default Remotion timeline',
-    timestamp: 'Baru saja',
-    author: 'Males Ngonten Agent',
-    isActive: true,
-    timelineSnapshot: JSON.stringify(DEFAULT_TIMELINE),
-  },
-];
+// Load checkpoints from disk after all paths are initialized
+loadCheckpointsFromIndex();
 
 // In-memory Render Jobs
 let renderJobs: {
@@ -282,41 +458,89 @@ let renderJobs: {
 // Active render processes map
 const activeRenderProcesses = new Map<string, ChildProcess>();
 
-// In-memory Chat Sessions
+// In-memory Chat Sessions (loaded from disk on startup)
 let chatSessions: {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   messages: any[];
-}[] = [
-  {
-    id: 'session-main',
-    title: 'Edit Video Remotion Pertama',
-    createdAt: 'Hari ini',
-    updatedAt: 'Baru saja',
-    messages: [
-      {
-        id: 'msg-welcome',
-        role: 'assistant',
-        text: 'Halo! Saya AI Coding Agent di Males Ngonten Studio. Siap membantu membuat dan mengubah layer teks, durasi, animasi, dan musik di video Remotion Anda.',
-        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-        toolCalls: [
+}[] = [];
+
+function loadChatSessionsFromDisk() {
+  try {
+    const chatFiles = fs.readdirSync(CHATS_DIR).filter((f) => f.endsWith('.json'));
+    const sessions = chatFiles
+      .map((file) => {
+        try {
+          const data = JSON.parse(fs.readFileSync(path.join(CHATS_DIR, file), 'utf-8'));
+          return data;
+        } catch {}
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+
+    if (sessions.length > 0) {
+      chatSessions = sessions;
+    } else {
+      // Create default session if none exist
+      const defaultSession = {
+        id: 'session-main',
+        title: 'Edit Video Remotion Pertama',
+        createdAt: 'Hari ini',
+        updatedAt: 'Baru saja',
+        messages: [
           {
-            id: 'tc-init',
-            toolName: 'discoverWorkspace',
-            target: 'projects/proyek-remotion-1',
-            status: 'completed',
-            durationMs: 85,
-            result: 'Workspace loaded: 4 layers, 150 frames @ 30fps',
+            id: 'msg-welcome',
+            role: 'assistant',
+            text: 'Halo! Saya AI Coding Agent di Males Ngonten Studio. Siap membantu membuat dan mengubah layer teks, durasi, animasi, dan musik di video Remotion Anda.',
+            timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+            toolCalls: [
+              {
+                id: 'tc-init',
+                toolName: 'discoverWorkspace',
+                target: 'projects/proyek-remotion-1',
+                status: 'completed',
+                durationMs: 85,
+                result: 'Workspace loaded: 4 layers, 150 frames @ 30fps',
+              },
+            ],
+          },
+        ],
+      };
+      chatSessions = [defaultSession];
+      const chatFile = path.join(CHATS_DIR, `${defaultSession.id}.json`);
+      fs.writeFileSync(chatFile, JSON.stringify(defaultSession, null, 2), 'utf-8');
+    }
+  } catch {
+    // Fallback to default session
+    chatSessions = [
+      {
+        id: 'session-main',
+        title: 'Edit Video Remotion Pertama',
+        createdAt: 'Hari ini',
+        updatedAt: 'Baru saja',
+        messages: [
+          {
+            id: 'msg-welcome',
+            role: 'assistant',
+            text: 'Halo! Saya AI Coding Agent di Males Ngonten Studio. Siap membantu membuat dan mengubah layer teks, durasi, animasi, dan musik di video Remotion Anda.',
+            timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
           },
         ],
       },
-    ],
-  },
-];
+    ];
+  }
+}
 
-let activeSessionId = 'session-main';
+loadChatSessionsFromDisk();
+
+let activeSessionId = chatSessions[0]?.id || 'session-main';
 let selectedAgentId = 'agent-builtin';
 
 // Active Agent Status
@@ -764,6 +988,15 @@ app.post('/api/agent/prompt', async (req, res) => {
       // Determine editing actions based on user prompt
       let modificationSummary = '';
       let updatedTimeline = JSON.parse(JSON.stringify(currentTimelineData));
+      let aiRawResponse = '';
+
+      // Helper: broadcast an AI text chunk to SSE clients in real time
+      const streamAiChunk = (chunk: string) => {
+        aiRawResponse += chunk;
+        aiMessage.content = aiRawResponse;
+        aiMessage.text = aiRawResponse;
+        broadcastSSE('text_chunk', { messageId: aiMsgId, chunk, accumulated: aiRawResponse });
+      };
 
       // 1. OpenAI-Compatible API (BYOK) - Flexible for any provider (OpenRouter, Groq, DeepSeek, OpenAI, Ollama, etc.)
       const activeByok = byok || context?.byok;
@@ -780,6 +1013,7 @@ app.post('/api/agent/prompt', async (req, res) => {
 
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
           };
           if (activeByok.apiKey && typeof activeByok.apiKey === 'string' && activeByok.apiKey.trim()) {
             headers['Authorization'] = `Bearer ${activeByok.apiKey.trim()}`;
@@ -814,24 +1048,77 @@ Return ONLY valid JSON matching this schema:
                 { role: 'user', content: promptPayload },
               ],
               temperature: 0.2,
+              stream: true,
             }),
             signal: activeCancellationController?.signal,
           });
 
-          if (aiResponse.ok) {
-            const data = await aiResponse.json();
-            const rawContent = data.choices?.[0]?.message?.content || '';
-            const cleaned = rawContent
+          if (aiResponse.ok && aiResponse.body) {
+            const reader = aiResponse.body.getReader();
+            const decoder = new TextDecoder();
+            let leftover = '';
+
+            try {
+              while (true) {
+                if (activeCancellationController?.signal.aborted) {
+                  throw new Error('Dibatalkan oleh pengguna');
+                }
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                leftover += decoder.decode(value, { stream: true });
+                const lines = leftover.split('\n');
+                leftover = lines.pop() || '';
+
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (!trimmed.startsWith('data:')) continue;
+                  const dataStr = trimmed.slice(5).trim();
+                  if (dataStr === '[DONE]') continue;
+                  try {
+                    const data = JSON.parse(dataStr);
+                    const delta = data.choices?.[0]?.delta;
+                    if (delta && typeof delta.content === 'string' && delta.content.length > 0) {
+                      streamAiChunk(delta.content);
+                    }
+                  } catch {}
+                }
+              }
+            } finally {
+              reader.releaseLock();
+            }
+
+            if (leftover.trim()) {
+              try {
+                const dataStr = leftover.trim();
+                if (dataStr.startsWith('data:')) {
+                  const inner = dataStr.slice(5).trim();
+                  if (inner !== '[DONE]') {
+                    const data = JSON.parse(inner);
+                    const delta = data.choices?.[0]?.delta;
+                    if (delta && typeof delta.content === 'string' && delta.content.length > 0) {
+                      streamAiChunk(delta.content);
+                    }
+                  }
+                }
+              } catch {}
+            }
+
+            const cleaned = aiRawResponse
               .replace(/^```json/im, '')
               .replace(/^```/im, '')
               .replace(/```$/m, '')
               .trim();
-            const parsed = JSON.parse(cleaned);
-            if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
-              updatedTimeline = parsed.timeline;
-              modificationSummary = parsed.summary || `Memperbarui timeline via model ${activeByok.modelId}.`;
-            } else {
-              providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
+            try {
+              const parsed = JSON.parse(cleaned);
+              if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
+                updatedTimeline = parsed.timeline;
+                modificationSummary = parsed.summary || `Memperbarui timeline via model ${activeByok.modelId}.`;
+              } else {
+                providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
+              }
+            } catch {
+              providerError = 'Gagal mem-parse respons JSON dari AI provider.';
             }
           } else {
             let errText = '';
@@ -849,7 +1136,7 @@ Return ONLY valid JSON matching this schema:
       } else if (!hasByok && geminiClient && text) {
         // Optional server-side Gemini fallback only if GEMINI_API_KEY environment variable is present and no BYOK is provided
         try {
-          const aiResponse = await geminiClient.models.generateContent({
+          const aiResponse = await geminiClient.models.generateContentStream({
             model: 'gemini-3.8-flash',
             contents: `You are the AI video editor coding agent behind Males Ngonten Studio, an automated short video engine built with Remotion.
 The user wants to modify their Remotion video project.
@@ -874,12 +1161,31 @@ Return ONLY valid JSON matching this schema:
             },
           });
 
-          if (aiResponse.text) {
-            const parsed = JSON.parse(aiResponse.text.trim());
+          for await (const chunk of aiResponse) {
+            if (activeCancellationController?.signal.aborted) {
+              throw new Error('Dibatalkan oleh pengguna');
+            }
+            const chunkText = chunk.text || '';
+            if (chunkText.length > 0) {
+              streamAiChunk(chunkText);
+            }
+          }
+
+          try {
+            const cleaned = aiRawResponse
+              .replace(/^```json/im, '')
+              .replace(/^```/im, '')
+              .replace(/```$/m, '')
+              .trim();
+            const parsed = JSON.parse(cleaned);
             if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
               updatedTimeline = parsed.timeline;
               modificationSummary = parsed.summary || 'Memperbarui timeline video sesuai instruksi AI.';
+            } else {
+              providerError = 'Model AI tidak mengembalikan format timeline JSON yang valid.';
             }
+          } catch {
+            providerError = 'Gagal mem-parse respons JSON dari Gemini.';
           }
         } catch (geminiErr: any) {
           providerError = `Gemini API Error: ${geminiErr?.message || geminiErr}`;
@@ -943,21 +1249,10 @@ Return ONLY valid JSON matching this schema:
       // Broadcast file change to reload Player realtime
       broadcastSSE('file_changed', { file: 'timeline.json', timeline: updatedTimeline });
 
-      // Tool call 3: Git Checkpoint
-      const newHash = 'chk-' + Math.random().toString(16).substring(2, 10);
-      const newShortHash = newHash.slice(0, 7);
+      // Tool call 3: Git Checkpoint (REAL git, not in-memory simulation)
       const commitMsg = modificationSummary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
-
-      gitCheckpoints.forEach((c) => (c.isActive = false));
-      gitCheckpoints.unshift({
-        hash: newHash,
-        shortHash: newShortHash,
-        message: commitMsg,
-        timestamp: 'Baru saja',
-        author: 'Males Ngonten Agent',
-        isActive: true,
-        timelineSnapshot: JSON.stringify(updatedTimeline, null, 2),
-      });
+      const newHash = createGitCheckpoint(commitMsg, updatedTimeline);
+      const newShortHash = newHash.slice(0, 7);
 
       aiMessage.checkpointHash = newHash;
       aiMessage.canRevert = true;
@@ -969,15 +1264,11 @@ Return ONLY valid JSON matching this schema:
 
       const finalReply = `Perubahan video berhasil diterapkan ke workspace lokal!\n\n- **Aksi**: ${modificationSummary}\n- **Protokol**: ACP Tool Execution (\`readFile\` -> \`writeFile\`)\n- **Git Checkpoint**: \`#${newShortHash}\`\n- **Remotion Player**: Preview ter-update otomatis secara realtime.\n\nAnda dapat melihat perubahannya langsung pada Player di atas atau mengecek tab Code & Timeline.`;
 
-      // Stream reply in small chunks so the UI can render incremental text
+      // Stream final reply text as text_chunk events for UI typing effect
       const chunkSize = 40;
-      let accumulated = '';
       for (let i = 0; i < finalReply.length; i += chunkSize) {
         const chunk = finalReply.slice(i, i + chunkSize);
-        accumulated += chunk;
-        aiMessage.content = accumulated;
-        aiMessage.text = accumulated;
-        broadcastSSE('text_chunk', { messageId: aiMsgId, chunk, accumulated });
+        streamAiChunk(chunk);
         await new Promise((r) => setTimeout(r, 30));
       }
 
@@ -1154,49 +1445,21 @@ app.delete('/api/assets/:id', (req, res) => {
 
 // 10. GET /api/versions, GET /api/versions/:hash/diff, POST /api/versions/:hash/restore
 app.get('/api/versions', (req, res) => {
-  res.json({ versions: gitCheckpoints });
+  res.json({ versions: getGitCheckpoints() });
 });
 
 app.get('/api/versions/:hash/diff', (req, res) => {
   const { hash } = req.params;
-  const targetVersion = gitCheckpoints.find((v) => v.hash === hash);
-  if (!targetVersion) return res.status(404).json({ error: 'Version not found' });
-
-  res.json({
-    hash,
-    message: targetVersion.message,
-    diff: {
-      filePath: 'timeline.json',
-      originalContent: fs.readFileSync(timelinePath, 'utf-8'),
-      newContent: targetVersion.timelineSnapshot,
-    },
-  });
+  const diff = getGitCheckpointDiff(hash);
+  if (!diff) return res.status(404).json({ error: 'Version not found' });
+  res.json(diff);
 });
 
 app.post('/api/versions/:hash/restore', (req, res) => {
   const { hash } = req.params;
-  const targetVersion = gitCheckpoints.find((v) => v.hash === hash);
-  if (!targetVersion) return res.status(404).json({ error: 'Version not found' });
-
-  const restoredTimelineJson = targetVersion.timelineSnapshot;
-  fs.writeFileSync(timelinePath, restoredTimelineJson, 'utf-8');
-
-  const restoreHash = 'rst-' + Math.random().toString(16).substring(2, 10);
-  gitCheckpoints.forEach((v) => (v.isActive = false));
-  gitCheckpoints.unshift({
-    hash: restoreHash,
-    shortHash: restoreHash.slice(0, 7),
-    message: `Restore ke checkpoint #${targetVersion.shortHash}: ${targetVersion.message}`,
-    timestamp: 'Baru saja',
-    author: 'Males Ngonten Agent',
-    isActive: true,
-    timelineSnapshot: restoredTimelineJson,
-  });
-
-  const parsed = JSON.parse(restoredTimelineJson);
-  broadcastSSE('file_changed', { file: 'timeline.json', timeline: parsed });
-
-  res.json({ success: true, newHash: restoreHash, timeline: parsed });
+  const result = restoreGitCheckpoint(hash);
+  if (!result) return res.status(404).json({ error: 'Version not found' });
+  res.json(result);
 });
 
 // 11. REMOTION VIDEO RENDERING ENGINE (CLI CHILD PROCESS & SSE STREAM)

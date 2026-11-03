@@ -168,168 +168,19 @@ export class MockAgentAdapter implements IAgentClient {
     },
     onUpdate?: (partialMessage: AgentMessage, toolCall?: AgentToolCall) => void
   ): Promise<AgentMessage> {
-    this.abortController = new AbortController();
-    this.status = 'thinking';
-
-    const userMsgId = `user-${Date.now()}`;
-    const userMsg: AgentMessage = {
-      id: userMsgId,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      attachments: attachments.length > 0 ? attachments : undefined,
-      context: {
-        playheadFrame: context?.currentFrame,
-        playheadSec: context?.currentFrame ? parseFloat((context.currentFrame / (context.timeline?.fps || 30)).toFixed(2)) : 0,
-        selectedClipId: context?.selectedClip?.id,
-        activeFile: context?.activeFile,
-      },
-    };
-
-    if (!this.sessionMessages[this.activeSessionId]) {
-      this.sessionMessages[this.activeSessionId] = [];
-    }
-    this.sessionMessages[this.activeSessionId].push(userMsg);
-
-    // Simulate Agent Thinking Delay
-    await new Promise((r) => setTimeout(r, 600));
-    if (this.abortController?.signal.aborted) {
-      this.status = 'idle';
-      throw new Error('Agent task aborted');
-    }
-
-    this.status = 'executing_tool';
-
-    // Generate tool calls based on prompt
-    const toolCalls: AgentToolCall[] = [];
-    const lower = text.toLowerCase();
-
-    if (attachments && attachments.length > 0) {
-      const toolInspect: AgentToolCall = {
-        id: `tc-attach-${Date.now()}`,
-        toolName: 'workspace_inspect_media',
-        description: `Memeriksa format & metadata file: ${attachments[0].name}`,
-        arguments: {
-          file: attachments[0].name,
-          type: attachments[0].type,
-          size: `${Math.round(attachments[0].size / 1024)} KB`,
-        },
-        status: 'running',
-        timestamp: 'Baru saja',
-      };
-      toolCalls.push(toolInspect);
-      onUpdate?.({
-        id: `assistant-stream-${Date.now()}`,
-        role: 'assistant',
-        content: `Menganalisis file lampiran \`${attachments[0].name}\`...`,
-        timestamp: 'Baru saja',
-        toolCalls: [...toolCalls],
-      }, toolInspect);
-
-      await new Promise((r) => setTimeout(r, 700));
-      toolInspect.status = 'completed';
-      toolInspect.result = `Asset metadata loaded. Added to workspace registry.`;
-      toolInspect.durationMs = 120;
-    }
-
-    if (lower.includes('headline') || lower.includes('teks') || lower.includes('subtitle') || lower.includes('tulisan') || lower.includes('geser') || lower.includes('posisi')) {
-      const toolTimeline: AgentToolCall = {
-        id: `tc-timeline-${Date.now()}`,
-        toolName: 'remotion_edit_timeline',
-        description: 'Memperbarui koordinat & animasi layer teks di timeline.json',
-        arguments: {
-          targetLayer: 'layer-text',
-          animation: lower.includes('zoom') ? 'zoom' : lower.includes('bounce') ? 'bounce' : 'slide-up',
-          x: 50,
-          y: lower.includes('atas') ? 30 : lower.includes('bawah') ? 70 : 45,
-          color: lower.includes('merah') ? '#e5484d' : '#ffffff',
-        },
-        status: 'running',
-        timestamp: 'Baru saja',
-      };
-      toolCalls.push(toolTimeline);
-      onUpdate?.({
-        id: `assistant-stream-${Date.now()}`,
-        role: 'assistant',
-        content: 'Mengupdate timing dan properti visual di engine Remotion...',
-        timestamp: 'Baru saja',
-        toolCalls: [...toolCalls],
-      }, toolTimeline);
-
-      await new Promise((r) => setTimeout(r, 800));
-      toolTimeline.status = 'completed';
-      toolTimeline.result = 'timeline.json updated successfully. Frame re-rendered.';
-      toolTimeline.durationMs = 95;
-    } else if (lower.includes('musik') || lower.includes('lagu') || lower.includes('audio')) {
-      const toolAudio: AgentToolCall = {
-        id: `tc-audio-${Date.now()}`,
-        toolName: 'remotion_sync_audio',
-        description: 'Menyesuaikan volume dan durasi layer musik',
-        arguments: {
-          layerId: 'layer-music',
-          volume: 0.85,
-          fadeInFrames: 15,
-        },
-        status: 'running',
-        timestamp: 'Baru saja',
-      };
-      toolCalls.push(toolAudio);
-      await new Promise((r) => setTimeout(r, 600));
-      toolAudio.status = 'completed';
-      toolAudio.result = 'Audio track mixed with timeline audio visualizer.';
-      toolAudio.durationMs = 110;
-    } else {
-      // Default diagnostic / lint tool
-      const toolDiag: AgentToolCall = {
-        id: `tc-diag-${Date.now()}`,
-        toolName: 'remotion_validate_composition',
-        description: 'Verifikasi frame integrity & props ShortVideoComposition',
-        arguments: {
-          composition: 'ShortVideoComposition.tsx',
-          fps: context?.timeline.fps || 30,
-          totalFrames: context?.timeline.durationInFrames || 150,
-        },
-        status: 'completed',
-        durationMs: 45,
-        result: '0 compilation errors. Composition is valid.',
-        timestamp: 'Baru saja',
-      };
-      toolCalls.push(toolDiag);
-    }
-
-    this.status = 'streaming';
-
-    // Craft intelligent response
-    let responseText = '';
-    if (attachments.length > 0) {
-      responseText = `Aset **${attachments[0].name}** berhasil diterima dan didaftarkan ke workspace! Saya telah menyiapkannya untuk dijadikan layer visual atau background di timeline Remotion.`;
-    } else if (lower.includes('headline') || lower.includes('teks') || lower.includes('subtitle')) {
-      responseText = `Teks berhasil diubah dan diselaraskan dengan komposisi Remotion! Posisi koordinat \`(x, y)\` dan animasi telah diperbarui di \`timeline.json\`. Anda juga bisa langsung menyeret (*drag*) teks di layar preview video saat video di-pause.`;
-    } else if (lower.includes('musik') || lower.includes('audio')) {
-      responseText = `Musik latar telah disinkronkan dengan durasi timeline (${((context?.timeline.durationInFrames || 150) / 30).toFixed(1)} detik). Visualizer bar di pojok kanan atas preview akan otomatis berdenyut mengikuti frame.`;
-    } else {
-      responseText = `Instruksi *"${text}"* telah selesai diproses oleh coding agent via protokol ACP. Semua perubahan langsung tercermin secara instan di Remotion Player di bagian atas.`;
-    }
-
-    const assistantMsg: AgentMessage = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: responseText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    };
-
-    this.sessionMessages[this.activeSessionId].push(assistantMsg);
     this.status = 'idle';
 
-    // Update session metadata
-    const active = this.sessions.find((s) => s.id === this.activeSessionId);
-    if (active) {
-      active.updatedAt = 'Baru saja';
-      active.messagesCount = this.sessionMessages[this.activeSessionId].length;
-    }
-
-    return assistantMsg;
+    // MockAgentAdapter is only a fallback when the real backend is unreachable.
+    // It must NEVER simulate AI responses or fake tool calls, because that would
+    // mislead users into thinking the AI is working when it is not.
+    const errMsg: AgentMessage = {
+      id: `err-${Date.now()}`,
+      role: 'assistant',
+      content: `❌ **Backend AI Tidak Tersedia**\n\nMales Ngonten Studio tidak dapat terhubung ke backend server AI. Pastikan server berjalan di http://localhost:3000 dan Anda telah mengonfigurasi AI provider (BYOK atau Gemini) di menu Pengaturan.\n\nTidak ada respons AI yang disimulasikan di sini — semua pengeditan video memerlukan koneksi ke AI provider yang nyata.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    if (onUpdate) onUpdate(errMsg);
+    return errMsg;
   }
 }
 
