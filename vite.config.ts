@@ -16,7 +16,17 @@ export default defineConfig(() => {
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Ignore chat session files & render output so saving them doesn't trigger page reload.
+      watch: process.env.DISABLE_HMR === 'true'
+        ? null
+        : {
+            ignored: [
+              '**/.males_ngonten/**',
+              '**/out/**',
+              '**/node_modules/**',
+              '**/projects/**',
+            ],
+          },
     },
   };
 });

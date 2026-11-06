@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
- * Males Ngonten Studio - Real Remotion Video Renderer using FFmpeg
- * Renders actual playable H.264/AAC MP4 videos matching the project's timeline.
+ * Males Ngonten Studio - Remotion Video Renderer
+ * 
+ * Tries @remotion/renderer first (proper Remotion SSR pipeline: bundle -> selectComposition -> renderMedia).
+ * Falls back to raw FFmpeg if Remotion packages or Chromium are unavailable.
  */
 
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,53 +36,110 @@ if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
+// Determine dimensions
+let width = 720;
+let height = 1280;
+if (resolution === '1080p') {
+  width = 1080;
+  height = 1920;
+} else if (resolution === '4K') {
+  width = 2160;
+  height = 3840;
+}
+
 console.log(JSON.stringify({
   type: 'render_start',
   resolution,
   fps,
+  width,
+  height,
   projectDir,
   targetFile: outPath,
   timestamp: new Date().toISOString()
 }));
 
-// Find available font
-function findFontFile() {
-  const candidates = [
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
-    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
+// Read timeline from project
+const timelinePath = path.join(projectDir, 'timeline.json');
+let timeline = { fps: 30, durationInFrames: 150, width, height, layers: [] };
+if (fs.existsSync(timelinePath)) {
+  try {
+    timeline = JSON.parse(fs.readFileSync(timelinePath, 'utf-8'));
+  } catch {}
 }
 
-async function runRender() {
-  // Read timeline
-  const timelinePath = path.join(projectDir, 'timeline.json');
-  let timeline = { fps: 30, durationInFrames: 150, layers: [] };
-  if (fs.existsSync(timelinePath)) {
-    try {
-      timeline = JSON.parse(fs.readFileSync(timelinePath, 'utf-8'));
-    } catch {}
+const inputProps = { timeline };
+
+async function tryRemotionRender() {
+  // Check if Chromium is available - Remotion renderer requires it
+  const chromium = getArg('chromium', '');
+  let chromiumPath = '';
+  try {
+    const { execSync } = await import('child_process');
+    const res = execSync('which chromium-browser || which chromium || true', { encoding: 'utf-8', timeout: 2000 });
+    chromiumPath = res.trim();
+  } catch {}
+  if (!chromiumPath) {
+    throw new Error('Chromium not available - Remotion renderer cannot run');
   }
+
+  // Check if remotion packages are actually installed before attempting import
+  const bundlerPkg = path.join(ROOT_DIR, 'node_modules/@remotion/bundler/package.json');
+  const rendererPkg = path.join(ROOT_DIR, 'node_modules/@remotion/renderer/package.json');
+  if (!fs.existsSync(bundlerPkg) || !fs.existsSync(rendererPkg)) {
+    throw new Error('@remotion/bundler or @remotion/renderer not installed');
+  }
+
+  // Dynamic import so missing package doesn't crash the script
+  const { bundle } = await import('@remotion/bundler');
+  const { renderMedia, selectComposition } = await import('@remotion/renderer');
+
+  console.log(JSON.stringify({ type: 'bundling' }));
+  const bundleLocation = await bundle({
+    entryPoint: path.resolve(ROOT_DIR, 'src/index.tsx'),
+  });
+
+  console.log(JSON.stringify({ type: 'selecting_composition' }));
+  const composition = await selectComposition({
+    serveUrl: bundleLocation,
+    id: 'short-video',
+    inputProps,
+  });
+
+  console.log(JSON.stringify({ type: 'rendering' }));
+  await renderMedia({
+    composition,
+    serveUrl: bundleLocation,
+    codec: 'h264',
+    outputLocation: outPath,
+    inputProps,
+    fps: timeline.fps || fps,
+    onProgress: ({ progress }) => {
+      console.log(JSON.stringify({
+        type: 'progress',
+        percent: Math.round(progress * 100),
+        estimatedSecs: Math.round((1 - progress) * 10),
+      }));
+    },
+  });
+
+  console.log(JSON.stringify({
+    type: 'render_complete',
+    status: 'success',
+    outPath,
+    sizeBytes: fs.existsSync(outPath) ? fs.statSync(outPath).size : 0,
+  }));
+  process.exit(0);
+}
+
+function fallbackFFmpegRender() {
+  console.log(JSON.stringify({
+    type: 'fallback_ffmpeg',
+    reason: 'Remotion renderer unavailable (packages or Chromium missing)',
+  }));
 
   const totalFrames = timeline.durationInFrames || 150;
   const videoFps = fps || timeline.fps || 30;
   const durationSec = Math.max(1, (totalFrames / videoFps)).toFixed(2);
-
-  // Determine width & height
-  let width = 720;
-  let height = 1280;
-  if (resolution === '1080p') {
-    width = 1080;
-    height = 1920;
-  } else if (resolution === '4K') {
-    width = 2160;
-    height = 3840;
-  }
 
   // Extract text clips from timeline for overlay
   const textClips = [];
@@ -105,10 +164,22 @@ async function runRender() {
     }
   }
 
-  // Build FFmpeg filter
+  // Find font
+  function findFontFile() {
+    const candidates = [
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+      '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return null;
+  }
+
   const fontFile = findFontFile();
-  const filterParts = [];
-  filterParts.push(`format=yuv420p`);
+  const filterParts = [`format=yuv420p`];
 
   if (textClips.length > 0) {
     textClips.forEach((tc) => {
@@ -146,14 +217,11 @@ async function runRender() {
     outPath
   ];
 
-  console.log(JSON.stringify({
-    type: 'ffmpeg_cmd',
-    args: ffmpegArgs.join(' ')
-  }));
+  console.log(JSON.stringify({ type: 'ffmpeg_cmd', args: ffmpegArgs.join(' ') }));
 
   const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
-
   let outBuffer = '';
+
   ffmpegProc.stdout.on('data', (data) => {
     outBuffer += data.toString();
     const lines = outBuffer.split('\n');
@@ -176,8 +244,6 @@ async function runRender() {
     }
   });
 
-  ffmpegProc.stderr.on('data', () => {});
-
   ffmpegProc.on('close', (code) => {
     if (code === 0 && fs.existsSync(outPath) && fs.statSync(outPath).size > 1000) {
       const stats = fs.statSync(outPath);
@@ -185,13 +251,13 @@ async function runRender() {
         type: 'render_complete',
         status: 'success',
         outPath,
-        sizeBytes: stats.size
+        sizeBytes: stats.size,
       }));
       process.exit(0);
     } else {
       console.error(JSON.stringify({
         type: 'render_error',
-        error: `FFmpeg failed with exit code ${code}`
+        error: `FFmpeg failed with exit code ${code}`,
       }));
       process.exit(1);
     }
@@ -200,10 +266,16 @@ async function runRender() {
   ffmpegProc.on('error', (err) => {
     console.error(JSON.stringify({
       type: 'render_error',
-      error: err.message
+      error: err.message,
     }));
     process.exit(1);
   });
 }
 
-runRender();
+tryRemotionRender().catch((err) => {
+  console.error(JSON.stringify({
+    type: 'remotion_error',
+    error: err?.message || String(err),
+  }));
+  fallbackFFmpegRender();
+});

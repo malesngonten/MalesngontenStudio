@@ -8,11 +8,16 @@ import {
   XCircle,
   Clock,
   CheckCircle,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 import { RenderJob } from '../../types';
 import { PillButton } from '../ui/PillButton';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/Skeleton';
+import { ClientRenderPanel } from './ClientRenderPanel';
+import { BrowserCapabilityDetector } from './BrowserCapabilityDetector';
+import { TimelineData } from '../../types';
 
 interface RenderTabProps {
   currentJob: RenderJob | null;
@@ -20,6 +25,8 @@ interface RenderTabProps {
   onStartRender: (resolution: '720p' | '1080p' | '4K', fps: number) => void;
   onCancelRender: (jobId: string) => void;
   onDeleteRender: (jobId: string) => void;
+  timeline: TimelineData;
+  onClientRenderComplete?: (blobUrl: string, fileName: string, size: number) => void;
 }
 
 export const RenderTab: React.FC<RenderTabProps> = ({
@@ -28,10 +35,14 @@ export const RenderTab: React.FC<RenderTabProps> = ({
   onStartRender,
   onCancelRender,
   onDeleteRender,
+  timeline,
+  onClientRenderComplete,
 }) => {
   // Default 720p / 30fps as required for lightweight resource usage
   const [resolution, setResolution] = useState<'720p' | '1080p' | '4K'>('720p');
   const [fps, setFps] = useState<number>(30);
+  const [renderMode, setRenderMode] = useState<'server' | 'client'>('client');
+  const [clientRenderSupported, setClientRenderSupported] = useState<boolean | null>(null);
 
   const formatSize = (bytes?: number) => {
     if (!bytes) return '4.2 MB';
@@ -108,9 +119,64 @@ export const RenderTab: React.FC<RenderTabProps> = ({
           onClick={() => onStartRender(resolution, fps)}
         >
           <Film className="w-4 h-4 mr-2" />
-          Mulai Render ({resolution} @ {fps}fps)
+          Mulai Render Server ({resolution} @ {fps}fps)
         </Button>
       </div>
+
+      {/* Render Mode Toggle (Server vs Client) */}
+      <div className="bg-[#18181c] rounded-3xl p-4 space-y-3 shadow-lg border border-white/5">
+        <label className="text-xs font-semibold text-[#8b8b94] uppercase tracking-wider block mb-2">
+          Mode Render
+        </label>
+        <div className="flex gap-1">
+          <PillButton
+            variant={renderMode === 'server' ? 'filled' : 'outline'}
+            size="xs"
+            onClick={() => setRenderMode('server')}
+            className={renderMode === 'server' ? 'text-white shadow-md shadow-red-950/40' : 'text-[#8b8b94] hover:text-white'}
+          >
+            <Monitor className="w-3 h-3 mr-1" />
+            Server (Chromium)
+          </PillButton>
+          <PillButton
+            variant={renderMode === 'client' ? 'filled' : 'outline'}
+            size="xs"
+            onClick={() => setRenderMode('client')}
+            className={renderMode === 'client' ? 'text-white shadow-md shadow-red-950/40' : 'text-[#8b8b94] hover:text-white'}
+          >
+            <Smartphone className="w-3 h-3 mr-1" />
+            Browser (WebCodecs)
+          </PillButton>
+        </div>
+        <p className="text-[10px] text-[#76767f] mt-1.5">
+          {renderMode === 'server'
+            ? 'Render via Chromium headless di server. Memerlukan Chromium terpasang.'
+            : 'Render langsung di browser via WebCodecs. Tidak butuh Chromium server.'}
+        </p>
+      </div>
+
+      {/* Client-side Render Panel (shown when client mode selected) */}
+      {renderMode === 'client' && timeline && (
+        <>
+          {/* Browser capability detector — checks WebCodecs support before render */}
+          <BrowserCapabilityDetector
+            width={resolution === '1080p' ? 1080 : resolution === '4K' ? 2160 : 720}
+            height={resolution === '1080p' ? 1920 : resolution === '4K' ? 3840 : 1280}
+            container="mp4"
+            videoCodec="h264"
+            audioCodec="aac"
+            onSupportChange={setClientRenderSupported}
+          />
+
+          <ClientRenderPanel
+            timeline={timeline}
+            resolution={resolution}
+            fps={fps}
+            onRenderComplete={onClientRenderComplete}
+            browserSupported={clientRenderSupported}
+          />
+        </>
+      )}
 
       {/* Live SSE Progress Card (Active Card dengan efek 3-color glow gradient) */}
       {currentJob && (currentJob.status === 'rendering' || currentJob.status === 'queued') && (

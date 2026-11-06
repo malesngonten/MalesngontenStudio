@@ -13,6 +13,13 @@ import {
 import { BottomSheet } from '../ui/BottomSheet';
 import { AgentSettings } from '../../types';
 
+const StatCard: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
+  <div className="p-2 bg-zinc-900/40 rounded-xl border border-white/5">
+    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">{label}</div>
+    <div className="text-sm font-bold text-white font-mono tabular-nums">{value}</div>
+  </div>
+);
+
 interface UnifiedSettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,12 +67,30 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
   onUpdateProjectRules,
   onResetAll,
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'rules' | 'video' | 'about'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'rules' | 'video' | 'about' | 'usage'>('ai');
   const [baseUrl, setBaseUrl] = useState(settings.apiBaseUrl || '');
   const [apiKey, setApiKey] = useState(settings.apiKey || '');
   const [modelId, setModelId] = useState(settings.modelId || '');
   const [rulesText, setRulesText] = useState(projectRules);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [aiUsageStats, setAiUsageStats] = useState<any>(null);
+  const [aiUsageLoading, setAiUsageLoading] = useState(false);
+
+  // Fetch AI usage stats when usage tab is opened
+  React.useEffect(() => {
+    if (activeTab === 'usage' && !aiUsageLoading) {
+      setAiUsageLoading(true);
+      fetch('/api/ai/usage')
+        .then((r) => r.json())
+        .then((data) => {
+          setAiUsageStats(data);
+          setAiUsageLoading(false);
+        })
+        .catch(() => {
+          setAiUsageLoading(false);
+        });
+    }
+  }, [activeTab, aiUsageLoading]);
 
   // Sync internal state when sheet opens
   React.useEffect(() => {
@@ -153,6 +178,17 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
             }`}
           >
             Sistem
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('usage')}
+            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === 'usage'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Statistik AI
           </button>
         </div>
 
@@ -310,6 +346,95 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
                 <span>Reset Studio ke Default</span>
               </button>
             )}
+          </div>
+        )}
+
+        {/* TAB 5: Statistik Penggunaan AI */}
+        {activeTab === 'usage' && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-2xl bg-zinc-900/80 text-xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-white">Statistik AI Provider</span>
+                {aiUsageLoading ? (
+                  <span className="text-[10px] text-zinc-400 animate-pulse">Memuat…</span>
+                ) : (
+                  <span className="text-[10px] text-emerald-400">Terbaru</span>
+                )}
+              </div>
+
+              {aiUsageStats ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatCard label="Total Pesan" value={aiUsageStats.totalMessages || 0} />
+                    <StatCard label="Total Sesi" value={aiUsageStats.totalSessions || 0} />
+                    <StatCard
+                      label="Total Token"
+                      value={(aiUsageStats.totalTokens || 0).toLocaleString()}
+                    />
+                    <StatCard
+                      label="Biaya (USD)"
+                      value={`$${(aiUsageStats.totalEstimatedCostUsd || 0).toFixed(4)}`}
+                    />
+                  </div>
+
+                  <div className="mt-2">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">
+                      Per Provider
+                    </div>
+                    {Object.entries(aiUsageStats.byProvider || {}).map(
+                      ([provider, stats]: [string, any]) => (
+                        <div
+                          key={provider}
+                          className="flex justify-between p-1.5 bg-zinc-900/40 rounded border border-white/5"
+                        >
+                          <span className="text-[10px] text-zinc-300">{provider}</span>
+                          <span className="text-[10px] font-mono text-zinc-300">
+                            {(stats?.tokens || 0).toLocaleString()} token
+                          </span>
+                          <span className="text-[10px] font-mono text-emerald-400">
+                            ${(stats?.cost || 0).toFixed(4)}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div className="mt-2">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">
+                      Per Hari (7 terakhir)
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      {Object.entries(aiUsageStats.dailyBreakdown || {})
+                        .sort()
+                        .reverse()
+                        .slice(0, 7)
+                        .map(([date, stats]: [string, any]) => (
+                          <div
+                            key={date}
+                            className="flex justify-between p-1.5 bg-zinc-900/40 rounded border border-white/5"
+                          >
+                            <span className="text-[10px] font-mono text-zinc-300">{date}</span>
+                            <span className="text-[10px] font-mono text-zinc-300">
+                              {(stats?.tokens || 0).toLocaleString()} token
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-400">
+                              ${(stats?.cost || 0).toFixed(4)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-2 p-2 bg-zinc-900/40 rounded border border-white/5 text-[9px] text-zinc-500">
+                    Rentang: {aiUsageStats.periodStart} → {aiUsageStats.periodEnd}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-zinc-500 text-xs">
+                  Belum ada data penggunaan AI.
+                </div>
+              )}
+            </div>
           </div>
         )}
 

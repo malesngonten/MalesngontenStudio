@@ -7,6 +7,12 @@ import os from 'os';
 import { spawnSync, spawn, ChildProcess } from 'child_process';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import {
+  AIUsageRecord,
+  AIProvider,
+  AIUsageStats,
+  AIUsageQuery,
+} from './src/types';
 
 dotenv.config();
 
@@ -562,6 +568,160 @@ function broadcastSSE(event: string, data: any) {
   });
 }
 
+/* ========================================================
+ * AI USAGE STATISTICS STORAGE
+ * Pelacakan token, biaya, dan penggunaan AI per sesi, per instruksi,
+ * dan per periode waktu tertentu.
+ * ======================================================== */
+
+const AI_USAGE_PATH = path.join(WORKSPACE_DIR, '.ai_usage.json');
+let aiUsageRecords: AIUsageRecord[] = [];
+
+function loadAIUsageFromDisk() {
+  try {
+    if (fs.existsSync(AI_USAGE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(AI_USAGE_PATH, 'utf-8'));
+      if (Array.isArray(data)) {
+        aiUsageRecords = data;
+      }
+    }
+  } catch {}
+}
+
+function saveAIUsageToDisk() {
+  try {
+    fs.writeFileSync(AI_USAGE_PATH, JSON.stringify(aiUsageRecords, null, 2), 'utf-8');
+  } catch {}
+}
+
+function estimateTokens(text: string): number {
+  // Perkiraan kasar: ~4 karakter per token untuk bahasa Indonesia/Inggris
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+function estimateCostUsd(tokens: number, modelId: string): number {
+  // Estimasi biaya sederhana (per 1 juta token)
+  // Ini adalah estimasi, sesuaikan dengan harga model sebenarnya
+  const perMillion = modelId.includes('gemini') ? 0.50 : modelId.includes('claude') ? 3.00 : 1.00;
+  return (tokens / 1_000_000) * perMillion;
+}
+
+function addAIUsageRecord({
+  sessionId,
+  messageId,
+  provider,
+  modelId,
+  inputTokens,
+  outputTokens,
+  durationMs,
+  toolCalls,
+}: {
+  sessionId: string;
+  messageId: string;
+  provider: string;
+  modelId: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  toolCalls?: string[];
+}) {
+  const totalTokens = inputTokens + outputTokens;
+  const record: AIUsageRecord = {
+    id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    sessionId,
+    messageId,
+    provider,
+    modelId,
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    estimatedCostUsd: estimateCostUsd(totalTokens, modelId),
+    timestamp: new Date().toISOString(),
+    durationMs,
+    toolCalls: toolCalls || [],
+  };
+  aiUsageRecords.unshift(record);
+  saveAIUsageToDisk();
+  return record;
+}
+
+function getAIUsageStats(query: AIUsageQuery = {}): AIUsageStats {
+  const now = new Date();
+  const periodStart = query.startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const periodEnd = query.endDate || now.toISOString();
+
+  let filtered = aiUsageRecords.filter((r) => {
+    if (query.sessionId && r.sessionId !== query.sessionId) return false;
+    if (query.provider && r.provider !== query.provider) return false;
+    if (query.startDate && r.timestamp < query.startDate) return false;
+    if (query.endDate && r.timestamp > query.endDate) return false;
+    return true;
+  });
+
+  if (query.limit) {
+    filtered = filtered.slice(0, query.limit);
+  }
+  if (query.offset) {
+    filtered = filtered.slice(query.offset);
+  }
+
+  const totalInputTokens = filtered.reduce((sum, r) => sum + r.inputTokens, 0);
+  const totalOutputTokens = filtered.reduce((sum, r) => sum + r.outputTokens, 0);
+  const totalTokens = filtered.reduce((sum, r) => sum + r.totalTokens, 0);
+  const totalCost = filtered.reduce((sum, r) => sum + r.estimatedCostUsd, 0);
+
+  const sessionsSet = new Set(filtered.map((r) => r.sessionId));
+
+  const byProvider: Record<AIProvider, { tokens: number; cost: number; messages: number }> = {
+    byok: { tokens: 0, cost: 0, messages: 0 },
+    gemini: { tokens: 0, cost: 0, messages: 0 },
+    ollama: { tokens: 0, cost: 0, messages: 0 },
+    builtin: { tokens: 0, cost: 0, messages: 0 },
+  };
+
+  const bySession: Record<string, { tokens: number; cost: number; messages: number }> = {};
+  const dailyBreakdown: Record<string, { tokens: number; cost: number; messages: number }> = {};
+
+  filtered.forEach((r) => {
+    byProvider[r.provider].tokens += r.totalTokens;
+    byProvider[r.provider].cost += r.estimatedCostUsd;
+    byProvider[r.provider].messages += 1;
+
+    if (!bySession[r.sessionId]) {
+      bySession[r.sessionId] = { tokens: 0, cost: 0, messages: 0 };
+    }
+    bySession[r.sessionId].tokens += r.totalTokens;
+    bySession[r.sessionId].cost += r.estimatedCostUsd;
+    bySession[r.sessionId].messages += 1;
+
+    const day = r.timestamp.split('T')[0];
+    if (!dailyBreakdown[day]) {
+      dailyBreakdown[day] = { tokens: 0, cost: 0, messages: 0 };
+    }
+    dailyBreakdown[day].tokens += r.totalTokens;
+    dailyBreakdown[day].cost += r.estimatedCostUsd;
+    dailyBreakdown[day].messages += 1;
+  });
+
+  return {
+    totalSessions: sessionsSet.size,
+    totalMessages: filtered.length,
+    totalInputTokens,
+    totalOutputTokens,
+    totalTokens,
+    totalEstimatedCostUsd: totalCost,
+    periodStart,
+    periodEnd,
+    byProvider,
+    bySession,
+    dailyBreakdown,
+    recentRecords: aiUsageRecords.slice(0, 50),
+  };
+}
+
+loadAIUsageFromDisk();
+
 // Multer upload config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -759,6 +919,159 @@ function getSystemDiagnostics() {
 }
 
 /* ========================================================
+ * AI AGENT TOOL EXECUTION (File System & Terminal)
+ * ======================================================== */
+
+// Execute a single tool call from AI agent
+async function executeTool(toolCall: any): Promise<any> {
+  const { tool, path: filePath, content, command, resolution, fps, out } = toolCall;
+
+  switch (tool) {
+    case 'readFile': {
+      const targetPath = path.join(ACTIVE_PROJECT_DIR, filePath || '');
+      if (!fs.existsSync(targetPath)) {
+        return { error: `File not found: ${filePath}` };
+      }
+      const content = fs.readFileSync(targetPath, 'utf-8');
+      return { content, path: filePath, size: content.length };
+    }
+
+    case 'writeFile': {
+      const targetPath = path.join(ACTIVE_PROJECT_DIR, filePath || '');
+      // Prevent path traversal
+      if (filePath.includes('..')) {
+        return { error: 'Path traversal forbidden' };
+      }
+      // Ensure directory exists
+      const dir = path.dirname(targetPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(targetPath, content || '', 'utf-8');
+      return { success: true, path: filePath, bytes: (content || '').length };
+    }
+
+    case 'deleteFile': {
+      const targetPath = path.join(ACTIVE_PROJECT_DIR, filePath || '');
+      if (filePath.includes('..')) {
+        return { error: 'Path traversal forbidden' };
+      }
+      if (!fs.existsSync(targetPath)) {
+        return { error: `File not found: ${filePath}` };
+      }
+      fs.unlinkSync(targetPath);
+      return { success: true, path: filePath };
+    }
+
+    case 'listDirectory': {
+      const targetPath = path.join(ACTIVE_PROJECT_DIR, filePath || '.');
+      if (!fs.existsSync(targetPath)) {
+        return { error: `Directory not found: ${filePath}` };
+      }
+      const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+      return {
+        path: filePath || '.',
+        entries: entries.map((e) => ({
+          name: e.name,
+          type: e.isDirectory() ? 'directory' : 'file',
+          isDirectory: e.isDirectory(),
+        })),
+      };
+    }
+
+    case 'runBashCommand': {
+      return new Promise((resolve) => {
+        const { exec } = require('child_process');
+        exec(command || '', {
+          cwd: ACTIVE_PROJECT_DIR,
+          encoding: 'utf-8',
+          timeout: 60000,
+        }, (error, stdout, stderr) => {
+          resolve({
+            command,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            exitCode: error ? error.code : 0,
+            error: error ? error.message : null,
+          });
+        });
+      });
+    }
+
+    case 'renderVideo': {
+      return new Promise((resolve) => {
+        const renderScriptPath = path.join(SCRIPTS_DIR, 'render-cli.mjs');
+        const outPath = out || path.join(OUT_DIR, `males_ngonten_${Date.now()}.mp4`);
+
+        if (!fs.existsSync(renderScriptPath)) {
+          return resolve({ error: 'Render script not found' });
+        }
+
+        const proc = spawn(
+          process.execPath,
+          [
+            renderScriptPath,
+            '--resolution', resolution || '720p',
+            '--fps', (fps || 30).toString(),
+            '--out', outPath,
+            '--project', ACTIVE_PROJECT_DIR
+          ],
+          {
+            cwd: WORKSPACE_DIR,
+            env: { ...process.env, NODE_ENV: 'production' }
+          }
+        );
+
+        let stdoutBuffer = '';
+        proc.stdout.on('data', (chunk) => {
+          stdoutBuffer += chunk.toString();
+          const lines = stdoutBuffer.split('\n');
+          stdoutBuffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line.trim());
+              if (parsed.type === 'progress') {
+                broadcastSSE('render_progress', {
+                  job: { progress: parsed.percent, frame: parsed.frame, estimatedSecs: parsed.estimatedSecs }
+                });
+              }
+            } catch {}
+          }
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outPath)) {
+            const stats = fs.statSync(outPath);
+            resolve({
+              success: true,
+              outputPath: outPath,
+              sizeBytes: stats.size,
+              downloadUrl: `/api/renders/download/${path.basename(outPath)}`
+            });
+          } else {
+            resolve({ error: `Render failed with exit code ${code}` });
+          }
+        });
+
+        proc.on('error', (err) => {
+          resolve({ error: err.message });
+        });
+      });
+    }
+
+    default:
+      return { error: `Unknown tool: ${tool}` };
+  }
+}
+
+// Broadcast tool call update to SSE clients
+function broadcastToolCall(messageId: string, toolCall: any) {
+  broadcastSSE('tool_update', { messageId: toolCall.id || toolCall.tool, toolCall });
+}
+
+/* ========================================================
  * API ENDPOINTS
  * ======================================================== */
 
@@ -784,6 +1097,40 @@ app.get('/api/system/diagnostics', (req, res) => {
   const diag = getSystemDiagnostics();
   res.json(diag);
 });
+
+// 2b. GET /api/ai/usage — Statistik penggunaan AI (token, biaya, per sesi, per periode)
+app.get('/api/ai/usage', (req, res) => {
+  const q = req.query as Record<string, string | string[] | undefined>;
+  const stats = getAIUsageStats({
+    sessionId: getQueryString(q.sessionId),
+    provider: getQueryString(q.provider),
+    startDate: getQueryString(q.startDate),
+    endDate: getQueryString(q.endDate),
+    limit: getQueryNumber(q.limit),
+    offset: getQueryNumber(q.offset),
+  });
+  res.json(stats);
+});
+
+// 2c. GET /api/ai/usage/recent — Rekaman terbaru
+app.get('/api/ai/usage/recent', (req, res) => {
+  const q = req.query as Record<string, string | string[] | undefined>;
+  const limit = getQueryNumber(q.limit) || 50;
+  const stats = getAIUsageStats({ limit });
+  res.json({ recentRecords: stats.recentRecords });
+});
+
+// Helper functions for parsing Express query params
+function getQueryString(v: string | string[] | undefined): string | undefined {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v[0];
+  return undefined;
+}
+
+function getQueryNumber(v: string | string[] | undefined): number | undefined {
+  const s = getQueryString(v);
+  return s ? parseInt(s, 10) : undefined;
+}
 
 // 3. GET /api/agent/discover & POST /api/agent/select
 app.get('/api/agent/discover', (req, res) => {
@@ -903,10 +1250,81 @@ app.post('/api/agent/test-connection', async (req, res) => {
   }
 });
 
+// 5c. POST /api/agent/execute (Direct tool execution for AI agent)
+app.post('/api/agent/execute', async (req, res) => {
+  const { tool, path: filePath, content, command, resolution, fps, out } = req.body;
+
+  if (!tool) {
+    return res.status(400).json({ success: false, error: 'Tool wajib diisi.' });
+  }
+
+  try {
+    const result = await executeTool({
+      tool,
+      path: filePath,
+      content,
+      command,
+      resolution,
+      fps,
+      out,
+    });
+
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    // Special handling for writeFile to timeline.json
+    if (tool === 'writeFile' && filePath === 'timeline.json' && result.content) {
+      try {
+        const parsed = JSON.parse(result.content);
+        broadcastSSE('file_changed', { file: 'timeline.json', timeline: parsed });
+      } catch {}
+    }
+
+    // Special handling for renderVideo
+    if (tool === 'renderVideo' && result.success) {
+      broadcastSSE('render_completed', {
+        job: {
+          id: 'rnd-' + Date.now(),
+          status: 'completed',
+          progress: 100,
+          downloadUrl: result.downloadUrl,
+          fileName: path.basename(result.outputPath),
+          fileSize: result.sizeBytes,
+        }
+      });
+    }
+
+    return res.json({ success: true, result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
 // 6. POST /api/agent/prompt
 app.post('/api/agent/prompt', async (req, res) => {
-  const { text, context, attachments, sessionId, byok } = req.body;
-  const currentSession = chatSessions.find((s) => s.id === (sessionId || activeSessionId)) || chatSessions[0];
+  const { text, context, attachments, sessionId, byok, clientMessageId } = req.body;
+  let currentSession = chatSessions.find((s) => s.id === (sessionId || activeSessionId));
+  // Fallback: if no matching session, create a default one so messages aren't lost
+  if (!currentSession) {
+    if (chatSessions.length > 0) {
+      currentSession = chatSessions[0];
+    } else {
+      // No sessions at all - create a default session
+      const defaultId = 'session-main';
+      currentSession = {
+        id: defaultId,
+        title: 'Edit Video Remotion Pertama',
+        createdAt: 'Hari ini',
+        updatedAt: 'Baru saja',
+        messages: [],
+      };
+      chatSessions.unshift(currentSession);
+      activeSessionId = defaultId;
+      const chatFile = path.join(CHATS_DIR, `${defaultId}.json`);
+      fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
+    }
+  }
 
   if (!text && (!attachments || attachments.length === 0)) {
     return res.status(400).json({ error: 'Text or attachment is required' });
@@ -930,7 +1348,7 @@ app.post('/api/agent/prompt', async (req, res) => {
   broadcastSSE('agent_status', { status: 'thinking' });
 
   // Response message placeholder with guaranteed unique ID
-  const aiMsgId = `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const aiMsgId = clientMessageId || `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const aiMessage: any = {
     id: aiMsgId,
     role: 'assistant',
@@ -941,14 +1359,53 @@ app.post('/api/agent/prompt', async (req, res) => {
   };
   currentSession.messages.push(aiMessage);
 
+  // Deteksi pesan percakapan sederhana (salam / uji coba) — jawab langsung tanpa
+  // memicu AI provider, tanpa menjalankan tool, dan tanpa membaca file proyek.
+  const SIMPLE_GREETINGS = new Set([
+    'halo', 'hai', 'hello', 'hi', 'hey', 'test', 'apa kabar',
+    'selamat pagi', 'selamat siang', 'selamat sore', 'selamat malam'
+  ]);
+  const normalizedText = (text || '').trim().toLowerCase();
+  const isSimpleGreeting = SIMPLE_GREETINGS.has(normalizedText) || normalizedText.length <= 2;
+
+  if (isSimpleGreeting) {
+    agentStatus = 'idle';
+    broadcastSSE('agent_status', { status: 'idle' });
+
+    const greetingReply = 'Halo! Ada yang bisa saya bantu untuk video Remotion Anda hari ini?';
+    aiMessage.content = greetingReply;
+    aiMessage.text = greetingReply;
+    aiMessage.status = 'completed';
+    broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });
+
+    const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
+    fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
+    return;
+  }
+
   res.json({ success: true, messageId: aiMsgId });
 
   // Run Agent Processing in background
   (async () => {
+    let isTimeout = false;
     try {
       activeCancellationController = new AbortController();
 
-      // Read current timeline for context (read-only, no tool call broadcast unless editing)
+      // Timeout keseluruhan pemrosesan agent — mencegah THINKING terus-menerus
+      // jika provider AI tidak merespons atau proses tengah meleset.
+      // Naikkan ke 300 detik agar respons AI panjang tidak terpotong terlalu cepat.
+      const timeoutController = new AbortController();
+      setTimeout(() => {
+        isTimeout = true;
+        timeoutController.abort();
+      }, 300000);
+      timeoutController.signal.addEventListener('abort', () => {
+        if (activeCancellationController && !activeCancellationController.signal.aborted) {
+          activeCancellationController.abort();
+        }
+      });
+
+          // Read current timeline for context (read-only, no tool call broadcast unless editing)
       let currentTimelineData: any;
       try {
         currentTimelineData = JSON.parse(fs.readFileSync(timelinePath, 'utf-8'));
@@ -969,26 +1426,47 @@ app.post('/api/agent/prompt', async (req, res) => {
       };
 
       // Dual-mode system prompt:
-      // - CHAT mode: greetings/general questions → plain text response, no tools, no timeline change
-      // - EDIT mode: video modification requests → JSON with timeline changes
-      const systemPrompt = `You are the AI assistant for Males Ngonten Studio, a short video editor for TikTok/Reels/Shorts.
+      // - CHAT mode: greetings/general questions → plain text response, no tools
+      // - EDIT/ACT mode: video production requests → JSON with tool calls (file ops, terminal, render)
+      const systemPrompt = `You are the AI video production agent for Males Ngonten Studio, a short video editor for TikTok/Reels/Shorts.
+You operate on a local file system and have terminal access. You can read, write, delete files, run shell commands, and render videos.
 
-You have TWO modes:
+PROJECT STRUCTURE:
+projects/proyek-remotion-1/
+- src/Composition.tsx      - Remotion video component (React TSX)
+- timeline.json            - Timeline definition (layers, clips, durations)
+- assets.json              - Asset list (images, video, audio, fonts)
+- GEMINI.md                - Project rules & style guide
+- out/                     - Rendered MP4 videos
+- scripts/render-cli.mjs   - Remotion render CLI
 
-1. CHAT MODE - For greetings (halo, hai, etc.), general questions, casual conversation:
-   - Respond naturally in Indonesian
-   - Do NOT use JSON
-   - Do NOT mention tools, timeline, or git
-   - Just be a helpful, friendly assistant
+AVAILABLE TOOLS (respond with JSON matching this schema):
+{
+  "summary": "Short explanation in Indonesian (1-2 sentences)",
+  "toolCalls": [
+    {
+      "tool": "readFile | writeFile | deleteFile | listDirectory | runBashCommand | renderVideo",
+      "path": "file path relative to project root (for file tools)",
+      "content": "file content string (for writeFile)",
+      "command": "shell command string (for runBashCommand)",
+      "resolution": "720p | 1080p | 4K (for renderVideo)",
+      "fps": 24 | 30 | 60 (for renderVideo),
+      "out": "output mp4 path (for renderVideo)"
+    }
+  ]
+}
 
-2. EDIT MODE - When the user explicitly asks to modify the video timeline (change text, animation, duration, add/remove layers, change colors, etc.):
-   - Respond with ONLY valid JSON matching this schema:
-   {
-     "summary": "Short explanation in Indonesian (1-2 sentences)",
-     "timeline": <complete updated timeline object>
-   }
+TOOL USAGE EXAMPLES:
+- Read timeline: {"tool": "readFile", "path": "timeline.json"}
+- Write new composition: {"tool": "writeFile", "path": "src/NewComp.tsx", "content": "..."}
+- Delete file: {"tool": "deleteFile", "path": "src/OldComp.tsx"}
+- List directory: {"tool": "listDirectory", "path": "src"}
+- Run terminal: {"tool": "runBashCommand", "command": "npm install @remotion/media"}
+- Render video: {"tool": "renderVideo", "resolution": "720p", "fps": 30, "out": "out/video.mp4"}
 
-Decide the mode based on the user's message. If they say "hallo", "hai", or just chat, use CHAT MODE. If they ask to change video elements, use EDIT MODE.
+MODE SELECTION:
+- If user says hello/greeting/chat → plain text response in Indonesian, NO tools, NO JSON
+- If user asks to create/modify/render video files → respond with ONLY valid JSON matching schema above
 
 Current timeline:
 ${JSON.stringify(currentTimelineData, null, 2)}
@@ -1017,6 +1495,7 @@ User request:
             headers['Authorization'] = `Bearer ${activeByok.apiKey.trim()}`;
           }
 
+          const aiStartTime = Date.now();
           const aiResponse = await fetch(targetUrl, {
             method: 'POST',
             headers,
@@ -1083,6 +1562,23 @@ User request:
               } catch {}
             }
 
+            // Track AI token usage for BYOK response
+            try {
+              const inputText = systemPrompt + '\n\nUser request:\n' + text;
+              const inputTokens = estimateTokens(inputText);
+              const outputTokens = estimateTokens(aiRawResponse);
+              addAIUsageRecord({
+                sessionId: activeSessionId,
+                messageId: aiMsgId,
+                provider: 'byok',
+                modelId: activeByok.modelId.trim(),
+                inputTokens,
+                outputTokens,
+                durationMs: Date.now() - aiStartTime,
+                toolCalls: editingMode ? timelineChanges?.toolCalls?.map((tc: any) => tc.tool) || [] : [],
+              });
+            } catch {}
+
             // Try to parse as JSON for EDIT mode
             try {
               const cleaned = aiRawResponse
@@ -1092,6 +1588,9 @@ User request:
                 .trim();
               const parsed = JSON.parse(cleaned);
               if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
+                editingMode = true;
+                timelineChanges = parsed;
+              } else if (parsed.toolCalls && Array.isArray(parsed.toolCalls)) {
                 editingMode = true;
                 timelineChanges = parsed;
               }
@@ -1114,6 +1613,7 @@ User request:
       } else if (!hasByok && geminiClient && text) {
         // Optional server-side Gemini fallback
         try {
+          const geminiStartTime = Date.now();
           const aiResponse = await geminiClient.models.generateContentStream({
             model: 'gemini-3.8-flash',
             contents: systemPrompt + '\n\nUser request:\n' + text,
@@ -1132,6 +1632,23 @@ User request:
             }
           }
 
+          // Track AI token usage for Gemini response
+          try {
+            const inputText = systemPrompt + '\n\nUser request:\n' + text;
+            const inputTokens = estimateTokens(inputText);
+            const outputTokens = estimateTokens(aiRawResponse);
+            addAIUsageRecord({
+              sessionId: activeSessionId,
+              messageId: aiMsgId,
+              provider: 'gemini',
+              modelId: 'gemini-3.8-flash',
+              inputTokens,
+              outputTokens,
+              durationMs: Date.now() - geminiStartTime,
+              toolCalls: editingMode ? timelineChanges?.toolCalls?.map((tc: any) => tc.tool) || [] : [],
+            });
+          } catch {}
+
           // Try to parse as JSON for EDIT mode
           try {
             const cleaned = aiRawResponse
@@ -1141,6 +1658,9 @@ User request:
               .trim();
             const parsed = JSON.parse(cleaned);
             if (parsed.timeline && Array.isArray(parsed.timeline.layers)) {
+              editingMode = true;
+              timelineChanges = parsed;
+            } else if (parsed.toolCalls && Array.isArray(parsed.toolCalls)) {
               editingMode = true;
               timelineChanges = parsed;
             }
@@ -1175,12 +1695,70 @@ User request:
         return;
       }
 
-      // If EDIT mode: apply timeline changes, create git checkpoint
-      if (editingMode && timelineChanges) {
+      // If tool calls: execute each tool sequentially (AI Agent mode)
+      if (editingMode && timelineChanges && timelineChanges.toolCalls && Array.isArray(timelineChanges.toolCalls)) {
         agentStatus = 'executing_tool';
         broadcastSSE('agent_status', { status: 'executing_tool' });
 
-        const tool2: any = {
+        for (const tc of timelineChanges.toolCalls) {
+          const toolCall: any = {
+            id: 'tc-' + tc.tool + '-' + Date.now(),
+            toolName: tc.tool,
+            description: `Eksekusi ${tc.tool}`,
+            arguments: tc,
+            target: tc.path || tc.command || tc.tool,
+            status: 'running',
+            timestamp: new Date().toISOString(),
+          };
+          aiMessage.toolCalls.push(toolCall);
+          broadcastSSE('tool_update', { messageId: aiMsgId, toolCall });
+
+          try {
+            const result = await executeTool(tc);
+            toolCall.status = 'completed';
+            toolCall.durationMs = 500;
+            toolCall.result = result;
+            broadcastSSE('tool_update', { messageId: aiMsgId, toolCall });
+
+            // Special handling: timeline change → broadcast file_changed + git checkpoint
+            if (tc.tool === 'writeFile' && tc.path === 'timeline.json' && result.content) {
+              try {
+                const parsed = JSON.parse(result.content);
+                broadcastSSE('file_changed', { file: 'timeline.json', timeline: parsed });
+                const commitMsg = timelineChanges.summary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
+                const newHash = createGitCheckpoint(commitMsg, parsed);
+                aiMessage.checkpointHash = newHash;
+                aiMessage.canRevert = true;
+              } catch {}
+            }
+
+            // Special handling: render video → track render job
+            if (tc.tool === 'renderVideo' && result.success) {
+              broadcastSSE('render_completed', {
+                job: {
+                  id: 'rnd-' + Date.now(),
+                  status: 'completed',
+                  progress: 100,
+                  downloadUrl: result.downloadUrl,
+                  fileName: path.basename(result.outputPath),
+                  fileSize: result.sizeBytes,
+                }
+              });
+            }
+          } catch (err: any) {
+            toolCall.status = 'failed';
+            toolCall.error = err?.message || String(err);
+            broadcastSSE('tool_update', { messageId: aiMsgId, toolCall });
+          }
+        }
+      }
+
+      // Legacy support: old-style timelineChanges without toolCalls (backward compat)
+      else if (editingMode && timelineChanges && timelineChanges.timeline) {
+        agentStatus = 'executing_tool';
+        broadcastSSE('agent_status', { status: 'executing_tool' });
+
+        const toolCall: any = {
           id: 'tc-write-' + Date.now(),
           toolName: 'writeFile',
           description: 'Menulis perubahan ke timeline.json di storage lokal',
@@ -1189,24 +1767,19 @@ User request:
           status: 'running',
           timestamp: new Date().toISOString(),
         };
-        aiMessage.toolCalls.push(tool2);
-        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
+        aiMessage.toolCalls.push(toolCall);
+        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall });
 
-        // Persist to actual filesystem
         fs.writeFileSync(timelinePath, JSON.stringify(timelineChanges.timeline, null, 2), 'utf-8');
-        tool2.status = 'completed';
-        tool2.durationMs = 380;
-        tool2.result = 'File timeline.json berhasil diperbarui di filesystem lokal.';
-        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall: tool2 });
+        toolCall.status = 'completed';
+        toolCall.durationMs = 380;
+        toolCall.result = 'File timeline.json berhasil diperbarui di filesystem lokal.';
+        broadcastSSE('tool_update', { messageId: aiMsgId, toolCall });
 
-        // Broadcast file change to reload Player realtime
         broadcastSSE('file_changed', { file: 'timeline.json', timeline: timelineChanges.timeline });
 
-        // Git Checkpoint (REAL git)
         const commitMsg = timelineChanges.summary || `Perubahan oleh agent: ${text.slice(0, 30)}`;
         const newHash = createGitCheckpoint(commitMsg, timelineChanges.timeline);
-        const newShortHash = newHash.slice(0, 7);
-
         aiMessage.checkpointHash = newHash;
         aiMessage.canRevert = true;
       }
@@ -1215,6 +1788,20 @@ User request:
       aiMessage.status = 'completed';
       aiMessage.content = aiRawResponse;
       aiMessage.text = aiRawResponse;
+
+      // Attach token usage to message for frontend display
+      try {
+        const inputText = systemPrompt + '\n\nUser request:\n' + text;
+        const inTokens = estimateTokens(inputText);
+        const outTokens = estimateTokens(aiRawResponse);
+        aiMessage.tokenUsage = {
+          inputTokens: inTokens,
+          outputTokens: outTokens,
+          totalTokens: inTokens + outTokens,
+          costUsd: estimateCostUsd(inTokens + outTokens, activeByok?.modelId || 'unknown'),
+          durationMs: 0,
+        };
+      } catch {}
 
       agentStatus = 'streaming';
       broadcastSSE('agent_status', { status: 'streaming' });
@@ -1228,7 +1815,13 @@ User request:
       const chatFile = path.join(CHATS_DIR, `${currentSession.id}.json`);
       fs.writeFileSync(chatFile, JSON.stringify(currentSession, null, 2), 'utf-8');
     } catch (err: any) {
-      aiMessage.text = `Terjadi kesalahan saat memproses permintaan: ${err?.message || err}`;
+      if (isTimeout) {
+        aiMessage.text = '⏱️ Waktu pemrosesan AI habis (timeout). Provider terlalu lama menanggapi, coba lagi atau pilih model yang lebih ringan.';
+      } else if (err?.name === 'AbortError') {
+        aiMessage.text = '🛑 Permintaan AI dibatalkan oleh pengguna.';
+      } else {
+        aiMessage.text = `❌ Gagal memproses permintaan melalui AI: ${err?.message || err}`;
+      }
       aiMessage.content = aiMessage.text;
       aiMessage.status = 'failed';
       broadcastSSE('message_complete', { messageId: aiMsgId, message: aiMessage });

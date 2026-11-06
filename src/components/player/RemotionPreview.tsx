@@ -431,7 +431,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
           {/* Aspect Ratio 9:16 Canvas Frame (Always strictly preserves aspect ratio, Zero Borders) */}
           <div
             ref={videoFrameRef}
-            className="h-full aspect-[9/16] bg-black shadow-[0_10px_40px_rgba(0,0,0,0.85)] relative flex items-center justify-center overflow-hidden rounded-3xl"
+            className="h-full aspect-[9/16] bg-black shadow-[0_10px_40px_rgba(0,0,0,0.85)] relative flex items-center justify-center overflow-hidden"
             style={{ maxHeight: '100%' }}
           >
             {/* Remotion Player Engine */}
@@ -493,7 +493,21 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
       </div>
 
       {/* 2. Floating Minimalist Control Dock - Clean, Soft Gradients, No Harsh Borders */}
-      <div className="h-11 px-3 sm:px-4 bg-gradient-to-t from-[#09090c] via-[#09090c]/90 to-transparent flex items-center justify-between gap-2 shrink-0 z-20">
+      <div className="h-11 px-3 sm:px-4 bg-gradient-to-t from-[#09090c] via-[#09090c]/90 to-transparent flex items-center justify-between gap-2 shrink-0 z-20 relative">
+        {/* Progress bar layer — placed above controls as separate layer, not inline */}
+        <div className="absolute -top-3 left-0 right-0 h-0.5 w-full overflow-hidden pointer-events-auto">
+          <div className="h-full bg-gradient-to-r from-red-500 to-rose-500 rounded-full shadow-lg shadow-red-500/30" style={{ width: `${Math.min(100, (currentFrame / Math.max(1, timeline.durationInFrames - 1)) * 100)}%` }} />
+          <input
+            type="range"
+            min={0}
+            max={Math.max(1, timeline.durationInFrames - 1)}
+            value={currentFrame}
+            onChange={handleScrubberChange}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer accent-red-500"
+            title="Geser timeline frame"
+          />
+        </div>
+
         {/* Left: Play/Pause & Timecode */}
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -515,19 +529,6 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             <span className="text-zinc-600">/</span>
             <span className="text-zinc-400">{totalSec}s</span>
           </div>
-        </div>
-
-        {/* Center: Slim Timeline Scrubber */}
-        <div className="flex-1 max-w-xs sm:max-w-md mx-1.5 flex items-center">
-          <input
-            type="range"
-            min={0}
-            max={Math.max(1, timeline.durationInFrames - 1)}
-            value={currentFrame}
-            onChange={handleScrubberChange}
-            className="w-full h-1.5 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded-full appearance-none cursor-pointer accent-red-500 hover:h-2 transition-all"
-            title="Geser timeline frame"
-          />
         </div>
 
         {/* Right: Quick actions (Track toggle, Zoom Reset, Rewind, Fullscreen) */}

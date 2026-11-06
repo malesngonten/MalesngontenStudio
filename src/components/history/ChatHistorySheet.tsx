@@ -7,7 +7,7 @@ interface ChatHistorySheetProps {
   isOpen: boolean;
   onClose: () => void;
   sessions: AgentSession[];
-  activeSessionId: string;
+  activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewChat: () => void;
   onDeleteSession: (id: string) => void;

@@ -188,3 +188,50 @@ export interface SystemDiagnostics {
   warnings: string[];
   recommendations: string[];
 }
+
+/* ========================================================
+ * AI USAGE STATISTICS TYPES
+ * Pelacakan token, biaya, dan penggunaan AI per sesi, per instruksi,
+ * dan per periode waktu tertentu.
+ * ======================================================== */
+
+export type AIProvider = string;
+
+export interface AIUsageRecord {
+  id: string;
+  sessionId: string;
+  messageId: string;
+  provider: AIProvider;
+  modelId: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  timestamp: string;
+  durationMs: number;
+  toolCalls?: string[]; // daftar tool yang dipanggil dalam pesan ini
+}
+
+export interface AIUsageStats {
+  totalSessions: number;
+  totalMessages: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalEstimatedCostUsd: number;
+  periodStart: string;
+  periodEnd: string;
+  byProvider: Record<AIProvider, { tokens: number; cost: number; messages: number }>;
+  bySession: Record<string, { tokens: number; cost: number; messages: number }>;
+  dailyBreakdown: Record<string, { tokens: number; cost: number; messages: number }>;
+  recentRecords: AIUsageRecord[];
+}
+
+export interface AIUsageQuery {
+  sessionId?: string;
+  provider?: AIProvider;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  limit?: number;
+  offset?: number;
+}

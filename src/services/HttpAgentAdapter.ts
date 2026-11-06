@@ -22,12 +22,51 @@ export class HttpAgentAdapter implements IAgentClient {
   private currentSessionId = 'session-main';
   private onToolUpdateCallback?: (msgId: string, tool: AgentToolCall) => void;
   private onFileChangedCallback?: (file: string, data: any) => void;
+  private lastError: string | null = null;
 
   constructor() {
     this.initSSE();
   }
 
+  /** Get the last error message encountered */
+  getLastError(): string | null {
+    return this.lastError;
+  }
+
+  /** Check if backend is reachable via a real API call */
+  async checkConnection(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/agent/status', { method: 'GET', cache: 'no-cache' });
+      if (res.ok) {
+        this.backendAvailable = true;
+        this.lastError = null;
+        return true;
+      }
+      this.backendAvailable = false;
+      this.lastError = `Backend HTTP ${res.status}`;
+      return false;
+    } catch (err: any) {
+      this.backendAvailable = false;
+      this.lastError = err.message || 'Backend tidak dapat dijangkau';
+      return false;
+    }
+  }
+
+  /** Re-establish SSE connection if it was lost */
+  private ensureSSE() {
+    if (typeof window === 'undefined') return;
+    if (this.eventSource && this.eventSource.readyState === EventSource.OPEN) return;
+    if (this.eventSource) {
+      try { this.eventSource.close(); } catch {}
+      this.eventSource = null;
+    }
+    this.initSSE();
+  }
+
   private onTextChunkCallback?: (msgId: string, chunk: string) => void;
+  private onRenderProgressCallback?: (job: any) => void;
+  private onRenderCompletedCallback?: (job: any) => void;
+  private onRenderCancelledCallback?: (jobId: string) => void;
 
   private initSSE() {
     if (typeof window === 'undefined') return;
@@ -64,8 +103,36 @@ export class HttpAgentAdapter implements IAgentClient {
       this.eventSource.addEventListener('text_chunk', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
+          console.log('[SSE] text_chunk received:', data.messageId, 'chunk len:', data.chunk?.length);
           if (this.onTextChunkCallback && data.chunk) {
             this.onTextChunkCallback(data.messageId, data.chunk);
+          }
+        } catch {}
+      });
+
+      this.eventSource.addEventListener('render_progress', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (this.onRenderProgressCallback && data.job) {
+            this.onRenderProgressCallback(data.job);
+          }
+        } catch {}
+      });
+
+      this.eventSource.addEventListener('render_completed', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (this.onRenderCompletedCallback && data.job) {
+            this.onRenderCompletedCallback(data.job);
+          }
+        } catch {}
+      });
+
+      this.eventSource.addEventListener('render_cancelled', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (this.onRenderCancelledCallback && data.jobId) {
+            this.onRenderCancelledCallback(data.jobId);
           }
         } catch {}
       });
@@ -85,6 +152,18 @@ export class HttpAgentAdapter implements IAgentClient {
 
   public onFileChanged(cb: (file: string, data: any) => void) {
     this.onFileChangedCallback = cb;
+  }
+
+  public onRenderProgress(cb: (job: any) => void) {
+    this.onRenderProgressCallback = cb;
+  }
+
+  public onRenderCompleted(cb: (job: any) => void) {
+    this.onRenderCompletedCallback = cb;
+  }
+
+  public onRenderCancelled(cb: (jobId: string) => void) {
+    this.onRenderCancelledCallback = cb;
   }
 
   async connect(): Promise<boolean> {
@@ -119,6 +198,7 @@ export class HttpAgentAdapter implements IAgentClient {
         apiKey: string;
         modelId: string;
       };
+      clientMessageId?: string;
     },
     onUpdate?: (partialMessage: AgentMessage, toolCall?: AgentToolCall) => void
   ): Promise<AgentMessage> {
@@ -126,86 +206,130 @@ export class HttpAgentAdapter implements IAgentClient {
     let streamingAccumulated = '';
     let currentMsgId = '';
 
+    // Client-generated message ID so frontend placeholder and backend SSE
+    // streaming events share the same ID — enables real-time token updates.
+    const clientMessageId = context?.clientMessageId || `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    currentMsgId = clientMessageId;
+
     try {
-      // Register listener for tool calls, text chunks & completion
-      const pendingPromise = new Promise<AgentMessage>((resolve, reject) => {
-        const handleComplete = (e: MessageEvent) => {
-          try {
-            const data = JSON.parse(e.data);
-            const msg = data.message || data;
-            const status = msg.status || 'completed';
-            if (this.eventSource) {
-              this.eventSource.removeEventListener('message_complete', handleComplete);
-            }
+      // Verify backend is reachable before attempting to send
+      const connected = await this.checkConnection();
+      if (!connected) {
+        const networkErr = new Error(this.lastError || 'Backend tidak dapat dijangkau');
+        this.lastError = networkErr.message;
+        throw networkErr;
+      }
 
-            if (status === 'failed' || status === 'error') {
-              this.status = 'idle';
-              reject(new Error(msg.content || msg.text || 'AI provider error'));
-              return;
-            }
+      // Ensure SSE channel is active for receiving completion events
+      this.ensureSSE();
 
-            this.status = 'idle';
-            resolve({
-              id: msg.id,
-              role: 'assistant',
-              content: msg.content || msg.text || streamingAccumulated,
-              text: msg.text || msg.content || streamingAccumulated,
-              timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              toolCalls: msg.toolCalls,
-              checkpointHash: msg.checkpointHash,
-              canRevert: msg.canRevert,
-              status: msg.status,
-            });
-          } catch (err) {
-            reject(err);
-          }
-        };
+      if (!this.eventSource) {
+        const noSSEErr = new Error('Saluran SSE tidak tersedia. Tidak dapat menerima respons dari server.');
+        this.status = 'idle';
+        this.lastError = noSSEErr.message;
+        throw noSSEErr;
+      }
 
-        const handleCancelled = (e: MessageEvent) => {
-          try {
-            if (this.eventSource) {
-              this.eventSource.removeEventListener('agent_cancelled', handleCancelled);
-            }
-            this.status = 'idle';
-            reject(new Error('Dibatalkan oleh pengguna'));
-          } catch {
-            reject(new Error('Dibatalkan oleh pengguna'));
-          }
-        };
+      // Variabel settle untuk promise yang di-resolve oleh SSE completion atau timeout
+      let settleResolve: ((value: AgentMessage) => void) | null = null;
+      let settleReject: ((reason?: any) => void) | null = null;
+      let settled = false;
 
+      const cleanup = () => {
         if (this.eventSource) {
-          this.eventSource.addEventListener('message_complete', handleComplete);
-          this.eventSource.addEventListener('agent_cancelled', handleCancelled);
+          this.eventSource.removeEventListener('message_complete', handleComplete);
+          this.eventSource.removeEventListener('agent_cancelled', handleCancelled);
         }
+      };
 
-        this.onTextChunkCallback = (msgId, chunk) => {
-          currentMsgId = msgId;
-          streamingAccumulated += chunk;
-          if (onUpdate) {
-            onUpdate({
+      const handleComplete = (e: MessageEvent) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        try {
+          const data = JSON.parse(e.data);
+          const msg = data.message || data;
+          const status = msg.status || 'completed';
+
+          if (status === 'failed' || status === 'error') {
+            this.status = 'idle';
+            settleReject?.(new Error(msg.content || msg.text || 'AI provider error'));
+            return;
+          }
+
+          this.status = 'idle';
+          settleResolve?.({
+            id: msg.id,
+            role: 'assistant',
+            content: msg.content || msg.text || streamingAccumulated,
+            text: msg.text || msg.content || streamingAccumulated,
+            timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            toolCalls: msg.toolCalls,
+            checkpointHash: msg.checkpointHash,
+            canRevert: msg.canRevert,
+            status: msg.status,
+          });
+        } catch (err) {
+          this.status = 'idle';
+          settleReject?.(err);
+        }
+      };
+
+      const handleCancelled = (e: MessageEvent) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        this.status = 'idle';
+        settleReject?.(new Error('Dibatalkan oleh pengguna'));
+      };
+
+      this.eventSource.addEventListener('message_complete', handleComplete);
+      this.eventSource.addEventListener('agent_cancelled', handleCancelled);
+
+      const pendingPromise = new Promise<AgentMessage>((resolve, reject) => {
+        settleResolve = resolve;
+        settleReject = reject;
+      });
+
+      this.onTextChunkCallback = (msgId, chunk) => {
+        currentMsgId = msgId;
+        streamingAccumulated += chunk;
+        if (onUpdate) {
+          onUpdate({
+            id: msgId,
+            role: 'assistant',
+            content: streamingAccumulated,
+            text: streamingAccumulated,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
+      };
+
+      this.onToolUpdateCallback = (msgId, toolCall) => {
+        if (onUpdate) {
+          onUpdate(
+            {
               id: msgId,
               role: 'assistant',
               content: streamingAccumulated,
               text: streamingAccumulated,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            });
-          }
-        };
+            },
+            toolCall
+          );
+        }
+      };
 
-        this.onToolUpdateCallback = (msgId, toolCall) => {
-          if (onUpdate) {
-            onUpdate(
-              {
-                id: msgId,
-                role: 'assistant',
-                content: streamingAccumulated,
-                text: streamingAccumulated,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-              toolCall
-            );
-          }
-        };
+      // Timeout promise — mencegah pendingPromise menunggu selamanya jika backend
+      // tidak pernah mengirim message_complete (provider AI hang / SSE terputus)
+      const REQUEST_TIMEOUT_MS = 300000;
+      const timeoutPromise = new Promise<AgentMessage>((_, reject) => {
+        const timer = setTimeout(() => {
+          cleanup(); // Buang listener SSE agar tidak tertumpuk
+          reject(new Error('Permintaan ke AI melebihi batas waktu (5 menit). Server mungkin sedang sibuk atau provider AI tidak merespons.'));
+        }, REQUEST_TIMEOUT_MS);
+        // Bersihkan timer jika promise sudah settle sebelum timeout
+        pendingPromise.then(() => clearTimeout(timer)).catch(() => clearTimeout(timer));
       });
 
       // Post prompt to backend with byok config
@@ -216,6 +340,7 @@ export class HttpAgentAdapter implements IAgentClient {
           text,
           attachments,
           byok: context?.byok,
+          clientMessageId,
           context: {
             playheadFrame: context?.currentFrame,
             playheadSec: context ? parseFloat((context.currentFrame / context.timeline.fps).toFixed(2)) : 0,
@@ -233,18 +358,42 @@ export class HttpAgentAdapter implements IAgentClient {
         } catch {
           errDetail = await res.text();
         }
-        throw new Error(`Server returned HTTP ${res.status}: ${errDetail}`);
+        const httpErr = new Error(`Server returned HTTP ${res.status}: ${errDetail}`);
+        this.lastError = httpErr.message;
+        this.status = 'idle';
+        throw httpErr;
       }
 
-      return await pendingPromise;
+      // Race antara completion dari SSE dan timeout — status akhir diikuti hasil provider,
+      // bukan hanya karena HTTP request awal sudah terkirim atau streaming sudah dimulai.
+      return await Promise.race([pendingPromise, timeoutPromise]);
     } catch (err: any) {
       this.status = 'idle';
+      this.lastError = err?.message || 'Server tidak dapat dihubungi';
+
+      // Differentiate error types for clearer messaging
+      let userMessage: string;
+      if (err?.message?.includes('melebihi batas waktu')) {
+        userMessage = '❌ ' + err.message;
+      } else if (err?.message?.includes('Failed to fetch') || err?.message?.includes('tidak dapat dijangkau')) {
+        userMessage = '❌ Tidak dapat terhubung ke backend server. Pastikan server Males Ngonten Studio sedang berjalan.';
+      } else if (err?.message?.includes('HTTP')) {
+        userMessage = `❌ Gagal memproses permintaan: ${err.message}`;
+      } else if (err?.message?.includes('provider') || err?.message?.includes('BYOK') || err?.message?.includes('API key')) {
+        userMessage = `❌ Error AI provider: ${err.message}`;
+      } else if (err?.message?.includes('Dibatalkan')) {
+        userMessage = '❌ Permintaan dibatalkan oleh pengguna.';
+      } else {
+        userMessage = `❌ Gagal memproses permintaan: ${err?.message || 'Terjadi kesalahan tidak diketahui'}`;
+      }
+
       const errMsg: AgentMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: `❌ Gagal memproses permintaan: ${err?.message || 'Server tidak dapat dihubungi'}`,
-        text: `❌ Gagal memproses permintaan: ${err?.message || 'Server tidak dapat dihubungi'}`,
+        content: userMessage,
+        text: userMessage,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'error',
       };
       if (onUpdate) onUpdate(errMsg);
       return errMsg;

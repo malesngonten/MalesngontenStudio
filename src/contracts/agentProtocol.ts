@@ -45,6 +45,13 @@ export interface AgentMessage {
     selectedClipId?: string;
     activeFile?: string;
   };
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUsd: number;
+    durationMs: number;
+  };
 }
 
 export interface AgentSession {

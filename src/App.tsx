@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { useStudioState } from './state/useStudioState';
+import {
+  useStudioState,
+  INITIAL_STUDIO_TIMELINE,
+} from './state/useStudioState';
 import { Header, StudioView } from './components/header/Header';
 import { RemotionPreview } from './components/player/RemotionPreview';
 import { ChatPanel } from './components/chat/ChatPanel';
-import { PromptDock } from './components/chat/PromptDock';
-import { LiveAgentActivityCard } from './components/chat/LiveAgentActivityCard';
 import { StoryboardView } from './components/storyboard/StoryboardView';
 import { CodeEditorPanel } from './components/code/CodeEditorPanel';
 import { AssetTab } from './components/assets/AssetTab';
@@ -16,8 +17,9 @@ import { ProjectAsset, TimelineClip, TimelineLayer } from './types';
 import { Timeline } from './components/timeline/Timeline';
 import { BottomToolbar } from './components/toolbar/BottomToolbar';
 import { UnifiedSettingsSheet } from './components/settings/UnifiedSettingsSheet';
+import { Toast } from './components/ui/Toast';
 import { studioWorkspace } from './services/WorkspaceService';
-import { Bot, X, Sparkles } from 'lucide-react';
+import { X, Sparkles, MessageSquare } from 'lucide-react';
 
 const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
 // Powered by Remotion v4.0 & Males Ngonten Studio AI Agent
@@ -60,8 +62,6 @@ export default function App() {
     selectedLayerId,
     selectedClip,
     selectedLayer,
-    splitMode,
-    setSplitMode,
     agentStatus,
     sessions,
     activeSessionId,
@@ -84,19 +84,27 @@ export default function App() {
     handleDeleteSession,
     agentSettings,
     handleUpdateSettings,
+    handleResetStudio,
+    isBackendAvailable,
+    streamingMessageId,
+    toast,
+    showToast,
+    hideToast,
   } = useStudioState();
 
-  // Active Main View (AI-first tabs: Studio, Storyboard, Kode, Aset)
-  const [activeView, setActiveView] = useState<StudioView>('studio');
+  // Handle client-side render complete (blob URL from browser)
+  const handleClientRenderComplete = useCallback((blobUrl: string, fileName: string, size: number) => {
+    showToast(`Render client-side selesai: ${fileName} (${(size / 1024 / 1024).toFixed(2)} MB)`);
+  }, [showToast]);
 
-  // Timeline track overlay visibility state (Clean floating overlay on top of full-height player)
+  // Timeline overlay visibility (floating sheet on top of player)
   const [isTimelineVisible, setIsTimelineVisible] = useState<boolean>(false);
 
-  // Full AI Conversation / ACP Thoughts slide-over sheet
-  const [isChatDrawerOpen, setIsChatDrawerOpen] = useState<boolean>(false);
-
-  // Chat panel visibility state for expansive studio
-  const [isDesktopChatOpen, setIsDesktopChatOpen] = useState<boolean>(true);
+  // Overlay sheets — Remotion Player stays visible behind these
+  const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
+  const [isCodeSheetOpen, setIsCodeSheetOpen] = useState<boolean>(false);
+  const [isAssetSheetOpen, setIsAssetSheetOpen] = useState<boolean>(false);
+  const [isStoryboardSheetOpen, setIsStoryboardSheetOpen] = useState<boolean>(false);
 
   // Modals / Drawers
   const [isRenderOpen, setIsRenderOpen] = useState(false);
@@ -122,33 +130,13 @@ export default function App() {
   }, [setIsPlaying]);
 
   // Frame scrub
-  const handleFrameUpdate = useCallback(
-    (frame: number) => {
-      setCurrentFrame(frame);
-    },
-    [setCurrentFrame]
-  );
+  const handleFrameUpdate = useCallback((frame: number) => {
+    setCurrentFrame(frame);
+  }, [setCurrentFrame]);
 
-  // Smart timeline toggle: on mobile, yields chat so Remotion player is never squeezed
+  // Timeline toggle
   const handleToggleTimeline = useCallback(() => {
-    setIsTimelineVisible((prev) => {
-      const next = !prev;
-      if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
-        setIsDesktopChatOpen(false);
-      }
-      return next;
-    });
-  }, []);
-
-  // Smart chat toggle: on mobile, yields timeline so Remotion player is never squeezed
-  const handleToggleChat = useCallback(() => {
-    setIsDesktopChatOpen((prev) => {
-      const next = !prev;
-      if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
-        setIsTimelineVisible(false);
-      }
-      return next;
-    });
+    setIsTimelineVisible((prev) => !prev);
   }, []);
 
   // Handle timeline clip props update
@@ -199,46 +187,16 @@ export default function App() {
         setAssets(updated);
       } catch (e) {
         console.error('Failed to upload asset files to server:', e);
+        showToast('Gagal mengunggah aset. Silakan coba lagi.');
       }
     },
-    [setAssets]
+    [setAssets, showToast]
   );
-
-
-  // Dynamic vertical split height calculation
-  const getPlayerHeightClass = () => {
-    switch (splitMode) {
-      case 'canvas-full':
-        return 'h-full md:w-full';
-      case 'player-focus':
-        return 'h-[65%] sm:h-[62%] md:w-[62%]';
-      case 'chat-focus':
-        return 'h-[35%] sm:h-[35%] md:w-[35%]';
-      case '50-50':
-      default:
-        return 'h-[50%] md:w-1/2';
-    }
-  };
-
-  const getChatHeightClass = () => {
-    switch (splitMode) {
-      case 'canvas-full':
-        return 'hidden';
-      case 'player-focus':
-        return 'h-[35%] sm:h-[38%] md:w-[38%]';
-      case 'chat-focus':
-        return 'h-[65%] sm:h-[65%] md:w-[65%]';
-      case '50-50':
-      default:
-        return 'h-[50%] md:w-1/2';
-    }
-  };
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const currentSec = (currentFrame / timeline.fps).toFixed(2);
   const totalAssetsSize = assets.reduce((sum, a) => sum + (a.size || 0), 0);
 
-  const latestAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
   const isAgentActive =
     agentStatus === 'thinking' ||
     agentStatus === 'executing_tool' ||
@@ -247,170 +205,65 @@ export default function App() {
 
   return (
     <div className="w-full h-dvh max-h-dvh flex flex-col bg-[#09090b] text-[#f4f4f5] antialiased overflow-hidden select-none font-sans">
-      {/* 1. Icon-Only Clean Header (No sidebar, no text clutter, no settings gear) */}
+      {/* 1. Icon-Only Clean Header */}
       <Header
         onOpenRender={() => setIsRenderOpen(true)}
         isRendering={!!currentRenderJob}
         agentStatus={agentStatus}
       />
 
-      {/* 2. Main Workspace (with pb-14 for fixed bottom toolbar) */}
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative pb-14">
-        {/* VIEW 1: STUDIO (Full-Height Immersive Remotion Canvas + Live Agent Streaming Card + Non-Overlapping Bottom Surface) */}
-        {activeView === 'studio' && (
-          <div className="w-full h-full flex flex-col overflow-hidden relative bg-[#070709]">
-            {/* FULL-HEIGHT HERO: Remotion Video Canvas with Unrestricted 2-Finger Pinch-to-Zoom */}
-            <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
-              <RemotionPreview
-                timeline={timeline}
-                currentFrame={currentFrame}
-                onFrameUpdate={handleFrameUpdate}
-                isPlaying={isPlaying}
-                onPlayPauseToggle={handlePlayPauseToggle}
-                selectedClipId={selectedClipId}
-                onSelectClip={handleSelectClip}
-                onUpdateClipPosition={handleUpdateClipPosition}
-                onPromptElementAction={(text, action) => {
-                  setPrefilledPrompt(`Tolong ubah elemen "${text}": ${action}`);
-                }}
-                isTimelineOpen={isTimelineVisible}
-                onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
-              />
+      {/* 2. MAIN LAYER: Remotion Player — SELALU VISIBLE sebagai background utama */}
+      <div className="flex-1 min-h-0 overflow-hidden relative bg-[#070709] pb-[80px]">
+        {/* Remotion Player — penuh di belakang semua overlay */}
+        <RemotionPreview
+          timeline={timeline}
+          currentFrame={currentFrame}
+          onFrameUpdate={handleFrameUpdate}
+          isPlaying={isPlaying}
+          onPlayPauseToggle={handlePlayPauseToggle}
+          selectedClipId={selectedClipId}
+          onSelectClip={handleSelectClip}
+          onUpdateClipPosition={handleUpdateClipPosition}
+          onPromptElementAction={(text, action) => {
+            setPrefilledPrompt(`Tolong ubah elemen "${text}": ${action}`);
+            setIsChatSheetOpen(true);
+          }}
+          isTimelineOpen={isTimelineVisible}
+          onToggleTimeline={handleToggleTimeline}
+        />
+
+        {/* Timeline overlay (float on top of player, bottom area) */}
+        {isTimelineVisible && (
+          <div
+            className="absolute bottom-[80px] left-0 right-0 h-[180px] overflow-y-auto bg-gradient-to-b from-[#14141c]/90 to-[#0a0a0e]/90 backdrop-blur-md p-2 z-30 animate-in slide-in-from-bottom duration-150 border-t border-white/10"
+          >
+            <div className="flex items-center justify-between px-3 py-1 text-xs text-zinc-400">
+              <span className="font-semibold text-white">Track Timeline</span>
+              <button
+                type="button"
+                onClick={() => setIsTimelineVisible(false)}
+                className="tap w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                title="Tutup Timeline"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* REALTIME AI STREAMING & ACP ACTIVITY CARD (Shows what file is being written, ACP tool checklist, progress) */}
-            {isAgentActive && (
-              <div className="shrink-0 pb-1 z-30">
-                <LiveAgentActivityCard
-                  status={agentStatus}
-                  activeToolCalls={
-                    activeToolCalls.length > 0
-                      ? activeToolCalls
-                      : latestAssistantMsg?.toolCalls || []
-                  }
-                  streamingText={latestAssistantMsg?.content}
-                  activeFile={activeFile}
-                  onStop={handleStopAgent}
-                  onOpenFullChat={() => setIsChatDrawerOpen(true)}
-                />
-              </div>
-            )}
-
-            {/* BOTTOM SURFACE: When Timeline is active, show Timeline and HIDE floating prompt! */}
-            {isTimelineVisible ? (
-              <div className="shrink-0 max-h-[175px] overflow-y-auto bg-gradient-to-b from-[#14141c] to-[#0a0a0e] p-2 z-30 animate-in slide-in-from-bottom duration-150">
-                <div className="flex items-center justify-between px-3 py-1 text-xs text-zinc-400">
-                  <span className="font-semibold text-white">Track Timeline</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsTimelineVisible(false)}
-                    className="tap w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                    title="Tutup Timeline"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <Timeline
-                  timeline={timeline}
-                  currentFrame={currentFrame}
-                  onSeek={handleFrameUpdate}
-                  selectedClipId={selectedClipId}
-                  onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
-                  onUpdateClipTiming={handleUpdateClipTiming}
-                />
-              </div>
-            ) : (
-              /* When Timeline is NOT active: Show the Clean Floating Prompt Dock */
-              <div className="shrink-0 z-20">
-                <PromptDock
-                  onSendMessage={handleSendMessage}
-                  isAgentWorking={isAgentActive}
-                  onStopAgent={handleStopAgent}
-                  prefilledPrompt={prefilledPrompt}
-                  byokModelId={agentSettings.modelId}
-                  onOpenSettings={() => setIsSettingsOpen(true)}
-                  isTimelineOpen={isTimelineVisible}
-                  onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
-                  onOpenFullChat={() => setIsChatDrawerOpen(true)}
-                  messagesCount={messages.length}
-                />
-              </div>
-            )}
+            <Timeline
+              timeline={timeline}
+              currentFrame={currentFrame}
+              onSeek={handleFrameUpdate}
+              selectedClipId={selectedClipId}
+              onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
+              onUpdateClipTiming={handleUpdateClipTiming}
+            />
           </div>
         )}
+      </div>
 
-        {/* VIEW 2: STORYBOARD & SCENE CARDS */}
-        {activeView === 'storyboard' && (
-          <StoryboardView
-            timeline={timeline}
-            currentFrame={currentFrame}
-            onSeek={handleFrameUpdate}
-            selectedClip={selectedClip}
-            selectedLayer={selectedLayer}
-            onSelectClip={(clip: TimelineClip, layer: TimelineLayer) =>
-              handleSelectClip(layer.id, clip.id)
-            }
-            onAddLayerClick={() => {}}
-            onUpdateClipProps={handleUpdateClipProps}
-            onUpdateClipTiming={handleUpdateClipTiming}
-            onDeleteClip={handleDeleteClip}
-            onCommandAI={(prompt) => {
-              setActiveView('studio');
-              setPrefilledPrompt(prompt);
-            }}
-          />
-        )}
+      {/* Pemberitahuan operasi — muncul di atas semua layar */}
+      <Toast open={!!toast} message={toast?.message ?? ''} onClose={hideToast} />
 
-        {/* VIEW 3: KODE (Remotion TSX & JSON Editor) */}
-        {activeView === 'code' && (
-          <div className="w-full h-full p-3 sm:p-4 bg-[#09090b]">
-            <div className="w-full h-full rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-              <CodeEditorPanel
-                files={filesState}
-                activeFile={activeFile}
-                onSelectFile={(f) => setActiveFile(f)}
-                onSaveFile={(f, content) =>
-                  setFilesState((prev) => ({ ...prev, [f]: content }))
-                }
-                isAgentEditingFile={agentStatus !== 'idle'}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* VIEW 4: ASET (Media Storage & Uploads) */}
-        {activeView === 'assets' && (
-          <div className="w-full h-full p-3 sm:p-4 bg-[#09090b] overflow-y-auto">
-            <div className="max-w-4xl mx-auto">
-              <AssetTab
-                assets={assets}
-                onUploadAssets={handleUploadAssets}
-                onDeleteAsset={async (id) => {
-                  try {
-                    const updated = await studioWorkspace.deleteAsset(id);
-                    setAssets(updated);
-                  } catch (e) {
-                    console.error('Failed to delete asset on server:', e);
-                    setAssets((prev) => prev.filter((a) => a.id !== id));
-                  }
-                }}
-                onUseAssetInChat={(asset: ProjectAsset) => {
-
-                  setActiveView('studio');
-                  handleSendMessage(
-                    `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
-                    []
-                  );
-                }}
-                usedBytes={totalAssetsSize}
-                maxBytes={500 * 1024 * 1024}
-              />
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* 3. Drawers & Dialogs */}
+      {/* 3. OVERLAY SHEETS — muncul di atas Remotion Player, tidak menutupnya sepenuhnya */}
 
       {/* Chat History Drawer */}
       <ChatHistorySheet
@@ -443,6 +296,8 @@ export default function App() {
             onStartRender={handleStartRender}
             onCancelRender={handleCancelRender}
             onDeleteRender={handleDeleteRender}
+            timeline={timeline}
+            onClientRenderComplete={handleClientRenderComplete}
           />
         </div>
       </BottomSheet>
@@ -502,14 +357,14 @@ export default function App() {
         </div>
       </BottomSheet>
 
-      {/* Full AI Director Chat & Execution Drawer */}
+      {/* Chat / Obrolan Sheet — overlay di atas player, bisa di-drag untuk mengubah tinggi */}
       <BottomSheet
-        isOpen={isChatDrawerOpen}
-        onClose={() => setIsChatDrawerOpen(false)}
-        title="AI Director Percakapan & Log"
-        subtitle="Riwayat interaksi, eksekusi tool ACP, dan perubahan komposisi"
+        isOpen={isChatSheetOpen}
+        onClose={() => setIsChatSheetOpen(false)}
+        title="Obrolan AI"
+        subtitle="Ketik perintah untuk mengedit dan merender video Remotion"
       >
-        <div className="h-[75vh]">
+        <div className="flex-1 min-h-0 h-full">
           <ChatPanel
             messages={messages}
             isAgentWorking={
@@ -522,15 +377,103 @@ export default function App() {
             currentSec={currentSec}
             selectedClipName={selectedClip?.name}
             prefilledPrompt={prefilledPrompt}
-            onClose={() => setIsChatDrawerOpen(false)}
+            onClose={() => setIsChatSheetOpen(false)}
             onOpenSettings={() => setIsAiSettingsOpen(true)}
             byokModelId={agentSettings.modelId}
             isByokConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
+            streamingMessageId={streamingMessageId}
+            activeToolCalls={activeToolCalls}
           />
         </div>
       </BottomSheet>
 
-      {/* Comprehensive Application Settings Sheet (AI BYOK, Project Rules, Video parameters, System Info, Reset) */}
+      {/* Code Editor Sheet — overlay di atas player */}
+      <BottomSheet
+        isOpen={isCodeSheetOpen}
+        onClose={() => setIsCodeSheetOpen(false)}
+        title="Kode Remotion TSX"
+        subtitle="Edit komposisi video secara deklaratif"
+      >
+        <div className="p-3 sm:p-4">
+          <div className="w-full h-full rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+            <CodeEditorPanel
+              files={filesState}
+              activeFile={activeFile}
+              onSelectFile={(f) => setActiveFile(f)}
+              onSaveFile={(f, content) =>
+                setFilesState((prev) => ({ ...prev, [f]: content }))
+              }
+              isAgentEditingFile={agentStatus !== 'idle'}
+            />
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Asset Manager Sheet — overlay di atas player */}
+      <BottomSheet
+        isOpen={isAssetSheetOpen}
+        onClose={() => setIsAssetSheetOpen(false)}
+        title="Aset Media"
+        subtitle="Gambar, video, audio, dan font untuk video Anda"
+      >
+        <div className="p-3 sm:p-4 min-h-0">
+          <div className="max-w-4xl mx-auto">
+            <AssetTab
+              assets={assets}
+              onUploadAssets={handleUploadAssets}
+              onDeleteAsset={async (id) => {
+                try {
+                  const updated = await studioWorkspace.deleteAsset(id);
+                  setAssets(updated);
+                } catch (e) {
+                  console.error('Failed to delete asset on server:', e);
+                  showToast('Gagal menghapus aset. Aset tetap ada dan data tidak berubah.');
+                }
+              }}
+              onUseAssetInChat={(asset: ProjectAsset) => {
+                setIsChatSheetOpen(true);
+                handleSendMessage(
+                  `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
+                  []
+                );
+              }}
+              usedBytes={totalAssetsSize}
+              maxBytes={500 * 1024 * 1024}
+            />
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Storyboard Sheet — overlay di atas player */}
+      <BottomSheet
+        isOpen={isStoryboardSheetOpen}
+        onClose={() => setIsStoryboardSheetOpen(false)}
+        title="Storyboard & Scene Cards"
+        subtitle="Atur urutan adegan dan klip video"
+      >
+        <div className="p-3 sm:p-4 min-h-0">
+          <StoryboardView
+            timeline={timeline}
+            currentFrame={currentFrame}
+            onSeek={handleFrameUpdate}
+            selectedClip={selectedClip}
+            selectedLayer={selectedLayer}
+            onSelectClip={(clip: TimelineClip, layer: TimelineLayer) =>
+              handleSelectClip(layer.id, clip.id)
+            }
+            onAddLayerClick={() => {}}
+            onUpdateClipProps={handleUpdateClipProps}
+            onUpdateClipTiming={handleUpdateClipTiming}
+            onDeleteClip={handleDeleteClip}
+            onCommandAI={(prompt) => {
+              setIsChatSheetOpen(true);
+              setPrefilledPrompt(prompt);
+            }}
+          />
+        </div>
+      </BottomSheet>
+
+      {/* Comprehensive Application Settings Sheet */}
       <UnifiedSettingsSheet
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -541,23 +484,40 @@ export default function App() {
           setFilesState((prev) => ({ ...prev, ['GEMINI.md']: rules }))
         }
         onResetAll={() => {
-          localStorage.clear();
-          window.location.reload();
+          handleResetStudio();
+          setPrefilledPrompt('');
+          setActiveFile('ShortVideoComposition.tsx');
+          setFilesState({
+            'ShortVideoComposition.tsx': COMPOSITION_SAMPLE_CODE,
+            'timeline.json': JSON.stringify(INITIAL_STUDIO_TIMELINE, null, 2),
+            'GEMINI.md': '# ATURAN PROYEK MALES NGONTEN STUDIO\n1. Format 9:16 portrait (1080x1920)\n2. Pacing cepat 1.5 - 2.5 detik per klip\n3. Animasi spring dengan damping Remotion.',
+          });
+          setIsTimelineVisible(false);
+          setIsChatSheetOpen(false);
+          setIsRenderOpen(false);
+          setIsAgentDrawerOpen(false);
+          setIsHistoryOpen(false);
+          setIsAiSettingsOpen(false);
         }}
       />
 
-      {/* 4. Fixed Horizontally Scrollable Bottom Toolbar with Pinned Chat AI Primary Button */}
+      {/* 4. Fixed Bottom Navigation Bar — tombol fitur buka overlay sheet */}
       <BottomToolbar
-        activeView={activeView}
-        onSelectView={setActiveView}
-        isChatOpen={isChatDrawerOpen}
-        onToggleChat={() => setIsChatDrawerOpen((prev) => !prev)}
+        isChatOpen={isChatSheetOpen}
+        onToggleChat={() => setIsChatSheetOpen((prev) => !prev)}
         isTimelineVisible={isTimelineVisible}
-        onToggleTimeline={() => setIsTimelineVisible((prev) => !prev)}
+        onToggleTimeline={handleToggleTimeline}
         sessionsCount={sessions.length}
         onOpenChatHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         isAiConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
+        isBackendAvailable={isBackendAvailable}
+        isCodeOpen={isCodeSheetOpen}
+        onToggleCode={() => setIsCodeSheetOpen((prev) => !prev)}
+        isAssetOpen={isAssetSheetOpen}
+        onToggleAsset={() => setIsAssetSheetOpen((prev) => !prev)}
+        isStoryboardOpen={isStoryboardSheetOpen}
+        onToggleStoryboard={() => setIsStoryboardSheetOpen((prev) => !prev)}
       />
     </div>
   );

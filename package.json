@@ -14,7 +14,9 @@
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
     "@google/genai": "^2.4.0",
+    "@remotion/bundler": "^4.0.540",
     "@remotion/player": "^4.0.538",
+    "@remotion/renderer": "^4.0.540",
     "@tailwindcss/vite": "^4.3.3",
     "@uiw/react-codemirror": "^4.25.12",
     "@vitejs/plugin-react": "^4.3.4",

@@ -155,23 +155,6 @@ export const PromptDock: React.FC<PromptDockProps> = ({
         onChange={handleFileChange}
       />
 
-      {/* 1. Live Agent Working Notification (Floating, Non-intrusive) */}
-      {isAgentWorking && (
-        <div className="pointer-events-auto mb-2 flex items-center gap-3 px-4 py-2 rounded-full bg-gradient-to-r from-red-950/90 via-zinc-900 to-red-950/90 shadow-2xl animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-          <span className="text-xs font-semibold text-rose-200">
-            AI Agent sedang meracik Remotion...
-          </span>
-          <button
-            type="button"
-            onClick={onStopAgent}
-            className="tap px-2.5 py-0.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all ml-1"
-          >
-            Stop
-          </button>
-        </div>
-      )}
-
       {/* 2. Quick Suggestion Chips (Directly Inspired by Reference Screenshot) */}
       <div className="pointer-events-auto w-full max-w-xl flex items-center gap-2 overflow-x-auto no-scrollbar py-1 mb-2">
         {QUICK_PROMPTS.map((prompt, idx) => (

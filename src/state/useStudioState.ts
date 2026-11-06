@@ -117,7 +117,7 @@ export const INITIAL_STUDIO_TIMELINE: TimelineData = {
   ],
 };
 
-const DEFAULT_ASSETS: ProjectAsset[] = [
+export const DEFAULT_ASSETS: ProjectAsset[] = [
   {
     id: 'asset-logo-brand',
     name: 'Black_Cat_Logo.png',
@@ -181,9 +181,30 @@ export function useStudioState() {
 
   // Agent State
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle');
+  const [isBackendAvailable, setIsBackendAvailable] = useState<boolean>(true);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string>('session-main');
+  // null saat tidak ada sesi aktif sama sekali (semua sudah dihapus) — jangan
+  // pernah arahkan ke ID sesi yang tidak ada / sudah dihapus.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>('session-main');
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  // Toast untuk kegagalan operasi (hapus, buat, unggah, dll.). Data UI
+  // tidak pernah diubah saat operasi gagal — pesan ini hanya memberi tahu pengguna.
+  const [toast, setToast] = useState<{ message: string } | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToast({ message });
+  }, []);
+
+  const hideToast = useCallback(() => {
+    setToast(null);
+  }, []);
+
+  // Toast hilang otomatis setelah 4 detik kecuali ditutup pengguna sebelumnya
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const [activeToolCalls, setActiveToolCalls] = useState<AgentToolCall[]>([]);
   const [assets, setAssets] = useState<ProjectAsset[]>(DEFAULT_ASSETS);
 
@@ -231,6 +252,7 @@ export function useStudioState() {
   // Sync timeline changes to backend and localStorage
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamingMsgRef = useRef<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const syncTimelineToWorkspace = useCallback((newTimeline: TimelineData) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
@@ -238,7 +260,24 @@ export function useStudioState() {
     }, 400);
   }, []);
 
+  // Check backend availability on mount and periodically
+  useEffect(() => {
+    let mounted = true;
+    const checkBackend = async () => {
+      const ok = await studioAgentClient.checkConnection();
+      if (mounted) setIsBackendAvailable(ok);
+    };
+    checkBackend();
+    const interval = setInterval(checkBackend, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Realtime SSE listener for backend file modifications & renders
+  // NOTE: text_chunk streaming is handled by HttpAgentAdapter (single EventSource).
+  // Render progress events also come via HttpAgentAdapter callbacks.
   useEffect(() => {
     studioAgentClient.onFileChanged((file, newTimeline) => {
       if (file === 'timeline.json' && newTimeline) {
@@ -246,44 +285,18 @@ export function useStudioState() {
       }
     });
 
-    // Listen for render SSE events directly
-    if (typeof window !== 'undefined') {
-      const es = new EventSource('/api/events');
-      es.addEventListener('render_progress', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.job) {
-            setCurrentRenderJob(data.job);
-          }
-        } catch {}
-      });
+    studioAgentClient.onRenderProgress((job) => {
+      setCurrentRenderJob(job);
+    });
 
-      es.addEventListener('render_completed', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.job) {
-            setCurrentRenderJob(null);
-            setCompletedRenderJobs((prev) => [
-              data.job,
-              ...prev.filter((j) => j.id !== data.job.id),
-            ]);
-          }
-        } catch {}
-      });
+    studioAgentClient.onRenderCompleted((job) => {
+      setCurrentRenderJob(null);
+      setCompletedRenderJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
+    });
 
-      es.addEventListener('render_cancelled', (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.jobId) {
-            setCurrentRenderJob(null);
-          }
-        } catch {}
-      });
-
-      return () => {
-        es.close();
-      };
-    }
+    studioAgentClient.onRenderCancelled((jobId) => {
+      setCurrentRenderJob(null);
+    });
   }, []);
 
   // Load initial workspace state, timeline, assets, & sessions
@@ -433,9 +446,42 @@ export function useStudioState() {
         },
       };
 
+      // Add user message immediately to conversation
       setMessages((prev) => deduplicateMessages([...prev, tempUserMsg]));
 
+      // Check backend connectivity before sending to AI
+      const backendOk = await studioAgentClient.checkConnection();
+      setIsBackendAvailable(backendOk);
+      if (!backendOk) {
+        setAgentStatus('idle');
+        setMessages((prev) => [...prev, {
+          id: `err-${Date.now()}`,
+          role: 'assistant',
+          content: '❌ Tidak dapat terhubung ke backend server. Pastikan server Males Ngonten Studio sedang berjalan di port 3000.',
+          text: '❌ Tidak dapat terhubung ke backend server. Pastikan server Males Ngonten Studio sedang berjalan di port 3000.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'error',
+        }]);
+        return;
+      }
+
       try {
+        // Placeholder pesan AI: shimmer ditampilkan sebelum token pertama diterima.
+        // Gunakan clientMessageId agar ID selaras dengan backend SSE (text_chunk & message_complete).
+        const clientMessageId = `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const placeholderId = clientMessageId;
+        const placeholderMsg: AgentMessage = {
+          id: placeholderId,
+          role: 'assistant',
+          content: '',
+          text: '',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'streaming',
+        };
+        streamingMsgRef.current = placeholderId;
+        setStreamingMessageId(placeholderId);
+        setMessages((prev) => deduplicateMessages([...prev, placeholderMsg]));
+
         const assistantMsg = await studioAgentClient.sendMessage(
           text,
           attachments,
@@ -444,6 +490,7 @@ export function useStudioState() {
             currentFrame,
             selectedClip,
             activeFile: 'ShortVideoComposition.tsx',
+            clientMessageId,
             byok: {
               baseUrl: agentSettings.apiBaseUrl,
               apiKey: agentSettings.apiKey,
@@ -459,33 +506,33 @@ export function useStudioState() {
             }
             // Incremental text streaming from AI provider
             if (partialMsg && partialMsg.content) {
-              if (!streamingMsgRef.current) {
-                streamingMsgRef.current = partialMsg.id;
-                setMessages((prev) => {
-                  const filtered = prev.filter((m) => m.id !== partialMsg.id);
-                  return [...filtered, partialMsg];
-                });
-              } else {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === streamingMsgRef.current
-                      ? { ...m, content: partialMsg.content, text: partialMsg.content }
-                      : m
-                  )
-                );
-              }
+              setMessages((prev) =>
+                prev.map((m) =>
+                  // Match by streamingMsgRef.current, or fallback to any streaming message
+                  m.id === streamingMsgRef.current || m.status === 'streaming'
+                    ? {
+                        ...m,
+                        content: partialMsg.content,
+                        text: partialMsg.content,
+                        status: 'streaming',
+                      }
+                    : m
+                )
+              );
             }
           }
         );
 
         // Replace streaming message with final message
+        // Coba update via streamingMsgRef.current dulu; kalau tidak ketemu, cari
+        // pesan mana pun yang masih status streaming; kalau juga tidak ada, tambahkan baru.
+        const finalContent = assistantMsg.content || assistantMsg.text || '';
         if (streamingMsgRef.current) {
-          // Preserve any accumulated streaming content if the final message is empty
-          const finalContent = assistantMsg.content || assistantMsg.text || '';
-          setMessages((prev) =>
-            prev.map((m) => {
+          let replaced = false;
+          setMessages((prev) => {
+            const next = prev.map((m) => {
               if (m.id === streamingMsgRef.current) {
-                // Keep streaming content if final message has no content
+                replaced = true;
                 return {
                   ...m,
                   content: finalContent || m.content,
@@ -497,9 +544,27 @@ export function useStudioState() {
                 };
               }
               return m;
-            })
-          );
+            });
+            // Fallback: kalau ID tidak cocok, ubah pesan mana pun yang masih streaming
+            if (!replaced) {
+              return next.map((m) =>
+                m.status === 'streaming'
+                  ? {
+                      ...m,
+                      content: finalContent || m.content,
+                      text: finalContent || m.text,
+                      status: assistantMsg.status || 'completed',
+                      toolCalls: assistantMsg.toolCalls,
+                      checkpointHash: assistantMsg.checkpointHash,
+                      canRevert: assistantMsg.canRevert,
+                    }
+                  : m
+              );
+            }
+            return next;
+          });
           streamingMsgRef.current = null;
+          setStreamingMessageId(null);
         } else {
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === assistantMsg.id);
@@ -517,17 +582,34 @@ export function useStudioState() {
           setAgentStatus('idle');
         }
       } catch (err) {
-        // Preserve any streaming content that was already received
+        setIsBackendAvailable(false);
+        const errMessage = err?.message || 'Terjadi kesalahan tidak diketahui';
+
+        // Preserve any streaming content that was already received, then mark it failed
         if (streamingMsgRef.current) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === streamingMsgRef.current
-                ? { ...m, status: 'failed', content: m.content || '❌ Gagal memproses permintaan', text: m.text || '❌ Gagal memproses permintaan' }
+                ? { ...m, status: 'failed', content: m.content || errMessage, text: m.text || errMessage }
                 : m
             )
           );
           streamingMsgRef.current = null;
+          setStreamingMessageId(null);
+        } else {
+          // Tidak ada chunk streaming yang diterima — tambahkan pesan error sebagai balasan asisten
+          // agar pengguna tidak melihat layar kosong atau indikator proses yang tetap aktif.
+          setMessages((prev) => [...prev, {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            content: '❌ Gagal memproses permintaan: ' + errMessage,
+            text: '❌ Gagal memproses permintaan: ' + errMessage,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'error',
+          }]);
         }
+        streamingMsgRef.current = null;
+        setStreamingMessageId(null);
         setAgentStatus('idle');
       }
     },
@@ -550,24 +632,48 @@ export function useStudioState() {
 
   // Create new chat session
   const handleNewChat = useCallback(async () => {
-    const newSession = await studioAgentClient.createSession();
-    setSessions(await studioAgentClient.getSessions());
-    setActiveSessionId(newSession.id);
-    const msgs = await studioAgentClient.switchSession(newSession.id);
-    setMessages(deduplicateMessages(msgs));
-  }, []);
-
-  // Delete chat session
-  const handleDeleteSession = useCallback(async (sessionId: string) => {
-    await studioAgentClient.deleteSession(sessionId);
-    const updated = await studioAgentClient.getSessions();
-    setSessions(updated);
-    if (updated.length > 0) {
-      setActiveSessionId(updated[0].id);
-      const msgs = await studioAgentClient.switchSession(updated[0].id);
+    try {
+      const backendOk = await studioAgentClient.checkConnection();
+      setIsBackendAvailable(backendOk);
+      if (!backendOk) {
+        setAgentStatus('idle');
+        showToast('Backend tidak dapat dijangkau. Percakapan baru tidak dapat dibuat.');
+        return;
+      }
+      const newSession = await studioAgentClient.createSession();
+      setSessions(await studioAgentClient.getSessions());
+      setActiveSessionId(newSession.id);
+      const msgs = await studioAgentClient.switchSession(newSession.id);
       setMessages(deduplicateMessages(msgs));
+    } catch (e) {
+      console.error('Failed to create new session:', e);
+      showToast('Gagal membuat percakapan baru. Silakan coba lagi.');
     }
-  }, []);
+  }, [showToast]);
+
+  // Delete chat session — selalu async, memperbarui state frontend langsung tanpa reload.
+  // Saat gagal: data tetap utuh di UI dan pengguna diberi tahu via toast.
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    try {
+      const backendOk = await studioAgentClient.checkConnection();
+      setIsBackendAvailable(backendOk);
+      await studioAgentClient.deleteSession(sessionId);
+      const updated = await studioAgentClient.getSessions();
+      setSessions(updated);
+      if (updated.length > 0) {
+        setActiveSessionId(updated[0].id);
+        const msgs = await studioAgentClient.switchSession(updated[0].id);
+        setMessages(deduplicateMessages(msgs));
+      } else {
+        // Tidak ada sesi tersisa — jangan arahkan ke ID sesi yang sudah dihapus
+        setActiveSessionId(null);
+        setMessages([]);
+      }
+    } catch (e) {
+      console.error('Failed to delete session:', e);
+      showToast('Gagal menghapus percakapan. Data tidak berubah dan tetap aman.');
+    }
+  }, [showToast]);
 
   // Render Management
   const handleStartRender = useCallback(
@@ -606,7 +712,49 @@ export function useStudioState() {
       setCompletedRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
     } catch (e) {
       console.error('Failed to delete render', e);
+      showToast('Gagal menghapus hasil render. Silakan coba lagi.');
     }
+  }, [showToast]);
+
+  // Reset studio ke default tanpa reload halaman
+  const handleResetStudio = useCallback(() => {
+    // Reset timeline
+    setTimeline(INITIAL_STUDIO_TIMELINE);
+    try { localStorage.removeItem('males_ngonten_timeline'); } catch {}
+
+    // Reset assets
+    setAssets(DEFAULT_ASSETS);
+
+    // Reset agent settings ke default
+    const defaultSettings: AgentSettings = {
+      apiBaseUrl: '',
+      apiKey: '',
+      modelId: '',
+      permissionMode: 'ask',
+      autoFixErrors: true,
+      maxAutoFixAttempts: 3,
+    };
+    setAgentSettings(defaultSettings);
+    try { localStorage.removeItem('males_ngonten_agent_settings'); } catch {}
+
+    // Reset chat / session state
+    setSessions([]);
+    setActiveSessionId('session-main');
+    setMessages([]);
+    setAgentStatus('idle');
+    setActiveToolCalls([]);
+    setIsBackendAvailable(true);
+
+    // Reset render state
+    setCurrentRenderJob(null);
+    setCompletedRenderJobs([]);
+
+    // Reset player state
+    setCurrentFrame(0);
+    setIsPlaying(false);
+    setSelectedClipId('clip-t1');
+    setSelectedLayerId('layer-text');
+    setSplitMode('50-50');
   }, []);
 
   return {
@@ -625,10 +773,14 @@ export function useStudioState() {
     agentStatus,
     sessions,
     activeSessionId,
+    setActiveSessionId,
     messages,
     activeToolCalls,
     assets,
     setAssets,
+    toast,
+    showToast,
+    hideToast,
     currentRenderJob,
     completedRenderJobs,
     handleStartRender,
@@ -644,5 +796,9 @@ export function useStudioState() {
     handleDeleteSession,
     agentSettings,
     handleUpdateSettings,
+    handleResetStudio,
+    DEFAULT_ASSETS,
+    isBackendAvailable,
+    streamingMessageId,
   };
 }

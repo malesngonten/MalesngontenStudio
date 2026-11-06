@@ -18,19 +18,25 @@ export const Header: React.FC<HeaderProps> = ({
   const getStatusDot = () => {
     switch (agentStatus) {
       case 'thinking':
-        return <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" title="AI sedang berpikir..." />;
+        return (
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shadow-lg shadow-amber-500/40" title="AI sedang berpikir..." />
+        );
       case 'executing_tool':
-        return <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" title="Mengeksekusi tool ACP..." />;
+        return (
+          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-lg shadow-cyan-500/40" title="Mengeksekusi tool ACP..." />
+        );
       case 'streaming':
-        return <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" title="AI sedang menulis..." />;
+        return (
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-lg shadow-rose-500/40" title="AI sedang menulis..." />
+        );
       case 'idle':
       default:
-        return <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" title="AI Siap" />;
+        return <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-500/40" title="AI Siap" />;
     }
   };
 
   return (
-    <header className="h-12 bg-gradient-to-b from-[#131318] via-[#0d0d12] to-[#070709] px-4 flex items-center justify-between select-none shrink-0 z-30 shadow-sm">
+    <header className="h-12 bg-gradient-to-b from-[#131318] via-[#0d0d12] to-[#070709] px-4 flex items-center justify-between select-none shrink-0 z-30 shadow-sm relative">
       {/* 1. Left: Brand Icon (Pure Icon, No Sidebar Button, No Text) */}
       <div className="flex items-center">
         <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-red-500 via-rose-600 to-red-600 shrink-0 shadow-md flex items-center justify-center p-0.5" title="Males Ngonten Studio">
@@ -42,15 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 2. Center: Minimalist Active Status Indicator Dot (Pure Icon, No Text Clutter) */}
-      <div className="flex items-center justify-center">
-        <div className="flex items-center justify-center p-1.5 rounded-full bg-zinc-900/90 shadow-xs">
-          {getStatusDot()}
-        </div>
-      </div>
-
-      {/* 3. Right: Ekspor MP4 Button (Pure Icon, No Text) */}
-      <div className="flex items-center">
+      {/* 2. Right: Ekspor MP4 Button + Recording Indicator Overlay */}
+      <div className="flex items-center gap-2 relative">
         <button
           type="button"
           onClick={onOpenRender}
@@ -59,10 +58,19 @@ export const Header: React.FC<HeaderProps> = ({
           className="tap w-9 h-9 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white flex items-center justify-center shadow-md shadow-red-950/40 transition-all"
         >
           <Film className="w-4 h-4" />
-          {isRendering && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white animate-ping" />
-          )}
         </button>
+
+        {/* Recording indicator — overlay layer above control, not inline */}
+        {isRendering && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-white animate-ping shadow-lg shadow-white/40 z-10" />
+        )}
+      </div>
+
+      {/* 3. AI Status Indicator — floating overlay layer above control layer (tengah atas, tidak mendorong tombol) */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 flex items-center">
+        <div className="flex items-center justify-center p-1.5 rounded-full bg-zinc-900/90 shadow-xs border border-white/10">
+          {getStatusDot()}
+        </div>
       </div>
     </header>
   );
