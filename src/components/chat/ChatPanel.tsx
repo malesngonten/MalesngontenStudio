@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
   ArrowUp,
   Square,
@@ -20,7 +18,8 @@ import {
   Key,
   Mic,
 } from 'lucide-react';
-import { AgentMessage, AgentAttachment } from '../../contracts/agentProtocol';
+import { AgentMessage, AgentAttachment, AgentToolCall } from '../../contracts/agentProtocol';
+import { MessageBubble } from './MessageBubble';
 
 interface ChatPanelProps {
   messages: AgentMessage[];
@@ -34,6 +33,8 @@ interface ChatPanelProps {
   onOpenSettings?: () => void;
   byokModelId?: string;
   isByokConfigured?: boolean;
+  streamingMessageId?: string | null;
+  activeToolCalls?: AgentToolCall[];
 }
 
 const AI_DIRECTOR_PROMPTS = [
@@ -57,6 +58,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onOpenSettings,
   byokModelId,
   isByokConfigured,
+  streamingMessageId = null,
+  activeToolCalls = [],
 }) => {
   const [inputText, setInputText] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
@@ -85,7 +88,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isAgentWorking]);
+  }, [messages, streamingMessageId]);
 
   // Adjust textarea height and border-radius dynamically based on line count
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -170,9 +173,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#09090c] select-text relative overflow-hidden">
+    <div className="w-full flex-1 flex flex-col bg-[#09090c] select-text relative overflow-hidden min-h-0">
       {/* Sleek Minimalist Top Header for Chat Panel (No harsh borders, soft dark gradient) */}
-      <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#111116] to-[#09090c] shadow-xs">
+      <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#111116] to-[#09090c] shadow-xs sticky top-0 z-20">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-full bg-red-600/20 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-red-400" />
@@ -244,11 +247,67 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         onChange={handleFileChange}
       />
 
-      {/* Messages Scroll Area with Modern, Legible Typography */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 min-h-0 text-sm">
+      {/* Active Tool Calls Panel — AI agent file/terminal operations */}
+      {activeToolCalls.length > 0 && (
+        <div className="mb-4 p-3 rounded-xl bg-zinc-900/60 border border-white/10 shadow-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <Terminal className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+              AI Agent Tool Calls
+            </span>
+            <span className="ml-auto text-[10px] text-zinc-500">
+              {activeToolCalls.filter((t) => t.status === 'running').length} running
+            </span>
+          </div>
+          <div className="space-y-2">
+            {activeToolCalls.map((tool) => (
+              <div
+                key={tool.id}
+                className={`p-2 rounded-lg border ${
+                  tool.status === 'running'
+                    ? 'border-zinc-700 bg-zinc-900/40 animate-pulse'
+                    : tool.status === 'completed'
+                    ? 'border-emerald-500/30 bg-emerald-950/10'
+                    : 'border-rose-500/30 bg-rose-950/10'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-mono text-zinc-400">{tool.toolName}</span>
+                  <span
+                    className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
+                      tool.status === 'running'
+                        ? 'bg-amber-500/20 text-amber-300 animate-pulse'
+                        : tool.status === 'completed'
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-rose-500/20 text-rose-300'
+                    }`}
+                  >
+                    {tool.status === 'running' ? 'Running' : tool.status === 'completed' ? 'Done' : 'Failed'}
+                  </span>
+                </div>
+                <div className="text-xs text-zinc-300 break-all">{tool.description || JSON.stringify(tool.arguments).slice(0, 100)}</div>
+                {tool.result && (
+                  <div className="mt-1.5 text-[10px] text-zinc-500 break-all bg-zinc-950/50 p-1.5 rounded">
+                    {typeof tool.result === 'object'
+                      ? JSON.stringify(tool.result, null, 2).slice(0, 200)
+                      : String(tool.result).slice(0, 200)}
+                  </div>
+                )}
+                {tool.status === 'failed' && tool.result && (
+                  <div className="mt-1.5 text-[10px] text-rose-400 break-all bg-rose-950/30 p-1.5 rounded border border-rose-500/20">
+                    {String(tool.result).slice(0, 200)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Messages Scroll Area — message bubbles via MessageBubble (user kanan, AI kiri + ikon luar) */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-sm">
         {messages.length === 0 && (
           <div className="py-10 text-center space-y-4 max-w-md mx-auto flex flex-col items-center">
-            {/* Model Announcement Pill Badge (Directly inspired by Reference Screenshot) */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-850 text-zinc-300 text-xs font-medium shadow-md">
               <span className="w-5 h-5 rounded-full bg-gradient-to-tr from-red-500 to-rose-400 text-white font-bold text-[11px] flex items-center justify-center">
                 AI
@@ -256,7 +315,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <span>{byokModelId ? byokModelId : 'Direct Video Generation'}</span>
             </div>
 
-            {/* Bold Modern Hero Headline (Exact vibe of Reference Screenshot) */}
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
               Build your video <br />
               <span className="bg-gradient-to-r from-red-400 via-rose-300 to-white bg-clip-text text-transparent">
@@ -276,164 +334,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           return (
             <div
               key={`${msg.id || 'msg'}-${index}`}
-              className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-full`}
+              className={`max-w-full`}
             >
-              {/* Message Bubble - Symmetrical & Clean */}
-              <div
-                className={`rounded-2xl px-4 py-3 max-w-[92%] sm:max-w-[85%] text-left shadow-lg ${
-                  isUser
-                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white rounded-br-xs'
-                    : 'bg-zinc-850/90 text-zinc-100 rounded-bl-xs ring-1 ring-white/5'
-                }`}
-              >
-                {/* User Attachments Preview */}
-                {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2.5">
-                    {msg.attachments.map((att) => (
-                      <div
-                        key={att.id}
-                        className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-black/40 text-xs font-medium"
-                      >
-                        {att.type === 'image' && att.url ? (
-                          <img
-                            src={att.url}
-                            alt={att.name}
-                            className="w-7 h-7 object-cover rounded-full"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
-                            {att.type === 'audio' ? (
-                              <Music className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : att.type === 'video' ? (
-                              <Video className="w-3.5 h-3.5 text-sky-400" />
-                            ) : (
-                              <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                            )}
-                          </div>
-                        )}
-                        <span className="truncate max-w-[120px]">{att.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Assistant Identity Banner */}
-                {!isUser && (
-                  <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-white/[0.08] text-xs text-zinc-400">
-                    <div className="w-4 h-4 rounded-full overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center">
-                      <img
-                        src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
-                        alt="Cat Logo"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="font-semibold text-white">AI Director</span>
-                    <span className="text-zinc-600">·</span>
-                    <span className="font-mono text-[10px] text-zinc-400">Remotion Agent</span>
-                  </div>
-                )}
-
-                {/* Markdown text with comfortable line-height and size */}
-                <div className="prose prose-invert prose-sm max-w-none break-words leading-relaxed text-zinc-100 font-sans">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-
-                {/* ACP Tool Executions */}
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="mt-2.5 pt-1.5 space-y-1.5">
-                    {msg.toolCalls.map((tool) => {
-                      const isExpanded = !!expandedTools[tool.id];
-                      return (
-                        <div
-                          key={tool.id}
-                          className="bg-black/35 rounded-xl overflow-hidden text-xs"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleToolExpand(tool.id)}
-                            className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-white/5 transition-colors gap-2"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Terminal className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                              <span className="font-mono text-xs text-zinc-300 font-medium truncate">
-                                {tool.toolName}
-                              </span>
-                              {tool.durationMs && (
-                                <span className="text-[10px] text-zinc-500 font-mono shrink-0">
-                                  {tool.durationMs}ms
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {tool.status === 'completed' && (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                              )}
-                              {tool.status === 'running' && (
-                                <span className="w-3 h-3 rounded-full border border-cyan-400 border-t-transparent animate-spin" />
-                              )}
-                              {isExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-                              )}
-                            </div>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="px-3 py-2 bg-black/50 space-y-1 text-xs font-mono text-zinc-400">
-                              {tool.description && <p>{tool.description}</p>}
-                              {tool.result && (
-                                <div className="text-emerald-300 bg-emerald-950/40 p-2 rounded-lg mt-1">
-                                  {tool.result}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Message Timestamp */}
-                <div
-                  className={`text-[10px] font-mono mt-1.5 ${
-                    isUser ? 'text-red-200/70 text-right' : 'text-zinc-500'
-                  }`}
-                >
-                  {msg.timestamp}
-                </div>
-              </div>
+              <MessageBubble
+                msg={msg}
+                isUser={isUser}
+                streamingMessageId={streamingMessageId}
+              />
             </div>
           );
         })}
 
-        {/* Live Agent Working Status Bar */}
-        {isAgentWorking && (
-          <div className="flex items-center gap-3 bg-zinc-850 px-4 py-2.5 rounded-2xl max-w-sm text-sm text-zinc-200 shadow-xl ring-1 ring-white/10">
-            <span className="w-4 h-4 rounded-full border-2 border-red-500 border-t-transparent animate-spin shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white truncate text-xs">AI Agent sedang meracik...</p>
-              <p className="text-[11px] text-zinc-400 font-mono truncate">
-                Remotion Recompile via ACP
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onStopAgent}
-              className="tap px-3 py-1 bg-red-600 hover:bg-red-500 rounded-full text-xs text-white font-bold transition-all shrink-0"
-            >
-              Stop
-            </button>
-          </div>
-        )}
-
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Modern Suggestion Chips (Directly Inspired by Google AI Studio Screenshot) */}
+      {/* Modern Suggestion Chips */}
       <div className="px-4 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 bg-gradient-to-r from-[#0d0d12] via-[#09090c] to-[#0d0d12]">
         {AI_DIRECTOR_PROMPTS.map((prompt, idx) => (
           <button
@@ -448,7 +363,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         ))}
       </div>
 
-      {/* Bottom Command Center Card - Unified Prompt Box (Directly Inspired by Reference Screenshot) */}
+      {/* Bottom Command Center Card - Unified Prompt Box */}
       <div className="p-3 sm:p-4 bg-gradient-to-t from-black via-[#09090d] to-[#09090c] shrink-0 z-10">
         {/* Attachment Previews */}
         {attachments.length > 0 && (
@@ -480,12 +395,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         )}
 
-        {/* Unified Prompt Container Card with Soft Gradient Surface (No Harsh Borders) */}
+        {/* Unified Prompt Container Card - selalu tetap di bawah (tidak ter-scroll) */}
         <form
           onSubmit={handleSubmit}
-          className="bg-gradient-to-b from-[#181822] via-[#131319] to-[#0f0f14] rounded-3xl p-3 shadow-2xl transition-all flex flex-col gap-2.5"
+          className="bg-gradient-to-b from-[#181822] via-[#131319] to-[#0f0f14] rounded-3xl p-3 shadow-2xl transition-all flex flex-col gap-2.5 shrink-0 mb-2 overflow-hidden"
         >
-          {/* Main Input Textarea with Dynamic Border Radius */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -503,11 +417,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             }}
           />
 
-          {/* Bottom Card Controls Row: (+) Attachment, Model Picker, and Sparkle/Send */}
+          {/* Bottom Card Controls Row */}
           <div className="flex items-center justify-between pt-1">
-            {/* Left Controls */}
             <div className="flex items-center gap-2">
-              {/* Plus (+) Attachment Button (Circle) */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -517,7 +429,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 <Plus className="w-4 h-4" />
               </button>
 
-              {/* Model Picker Pill (like "Default ⌵" in reference screenshot) */}
               <button
                 type="button"
                 onClick={onOpenSettings}
@@ -531,7 +442,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             </div>
 
-            {/* Right Controls: Send / Stop */}
             <div className="flex items-center gap-2">
               {isAgentWorking ? (
                 <button

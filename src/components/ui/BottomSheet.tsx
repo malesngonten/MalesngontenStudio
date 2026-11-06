@@ -35,14 +35,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       {/* Backdrop tap to close */}
       <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
 
-      {/* Sheet content */}
-      <div className="relative w-full max-w-[480px] max-h-[85vh] bg-gradient-to-b from-[#18181c] to-[#0f0f12] rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.8)] flex flex-col z-10 animate-in slide-in-from-bottom duration-200">
-        {/* Drag handle */}
-        <div className="w-full flex justify-center pt-2.5 pb-1">
+      {/* Sheet content — definite height so flex children can resolve & scroll internally */}
+      <div className="relative w-full max-w-[480px] h-[80vh] bg-gradient-to-b from-[#18181c] to-[#0f0f12] rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.8)] flex flex-col z-10 animate-in slide-in-from-bottom duration-200">
+        {/* Drag handle (visual only, no drag function) */}
+        <div className="w-full flex justify-center pt-2.5 pb-1 select-none">
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
 
-        {/* Header with subtle gradient separator */}
+        {/* Header */}
         <div className="flex items-center justify-between px-4 py-2 relative after:absolute after:bottom-0 after:left-4 after:right-4 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent">
           <div>
             <h3 className="text-sm font-semibold text-[#f2f2f3]">{title}</h3>
@@ -56,8 +56,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           />
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 safe-pb">
+        {/* Body — ChatPanel sendiri mengatur scroll internal area pesannya */}
+        <div className="flex-1 p-4 safe-pb min-h-0">
           {children}
         </div>
       </div>
