@@ -68,7 +68,7 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1.5 w-52 bg-gradient-to-b from-[#1a1a1e] to-[#121215] rounded-2xl shadow-2xl py-1.5 z-30 font-mono text-xs ring-1 ring-white/10 overflow-hidden">
+            <div className="absolute top-full left-0 mt-1.5 w-52 bg-gradient-to-b from-[#1a1a1e] to-[#121215] rounded-2xl shadow-2xl py-1.5 z-30 font-mono text-xs overflow-hidden">
               {Object.keys(files).map((fileName) => (
                 <button
                   key={fileName}
@@ -111,7 +111,7 @@ export const CodeEditorPanel: React.FC<CodeEditorPanelProps> = ({
 
       {/* Read-only lock banner when agent is editing file */}
       {isAgentEditingFile && (
-        <div className="bg-amber-950/40 border-b border-amber-800/40 px-3 py-1.5 flex items-center gap-2 text-xs text-amber-300">
+        <div className="bg-gradient-to-r from-amber-950/70 to-zinc-900/90 px-3 py-1.5 flex items-center gap-2 text-xs text-amber-300 shadow-sm">
           <Lock className="w-3.5 h-3.5 shrink-0" />
           <span>Editor dikunci: AI agent sedang melakukan perubahan pada file ini.</span>
         </div>

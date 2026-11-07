@@ -66,7 +66,7 @@ export const DiffCard: React.FC<DiffCardProps> = ({ diff, onAccept, onReject }) 
             <div className="text-[10px] font-bold text-red-400 mb-1 flex items-center gap-1">
               <span>- Sebelumnya</span>
             </div>
-            <pre className="p-2 rounded-xl bg-red-950/20 text-red-300 ring-1 ring-red-900/30 whitespace-pre-wrap overflow-x-auto">
+            <pre className="p-2 rounded-xl bg-red-950/20 text-red-300 shadow-inner whitespace-pre-wrap overflow-x-auto">
               {diff.originalContent.slice(0, 350)}
               {diff.originalContent.length > 350 ? '...' : ''}
             </pre>
@@ -75,7 +75,7 @@ export const DiffCard: React.FC<DiffCardProps> = ({ diff, onAccept, onReject }) 
             <div className="text-[10px] font-bold text-[#5fd3b0] mb-1 flex items-center gap-1">
               <span>+ Sesudah</span>
             </div>
-            <pre className="p-2 rounded-xl bg-[#12302a]/30 text-[#a2ecd8] ring-1 ring-[#2f6f5f]/30 whitespace-pre-wrap overflow-x-auto">
+            <pre className="p-2 rounded-xl bg-[#12302a]/30 text-[#a2ecd8] shadow-inner whitespace-pre-wrap overflow-x-auto">
               {diff.newContent.slice(0, 350)}
               {diff.newContent.length > 350 ? '...' : ''}
             </pre>

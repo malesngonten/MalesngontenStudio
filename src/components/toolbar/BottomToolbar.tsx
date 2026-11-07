@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Layout, Layers, Code2, FolderOpen, List, MessageSquare, Settings } from 'lucide-react';
+import { Layout, Layers, Code2, FolderOpen, List, MessageSquare, Settings, Boxes } from 'lucide-react';
 
 interface BottomToolbarProps {
   isChatOpen: boolean;
@@ -17,6 +17,8 @@ interface BottomToolbarProps {
   onToggleAsset?: () => void;
   isStoryboardOpen?: boolean;
   onToggleStoryboard?: () => void;
+  isElementOpen?: boolean;
+  onToggleElement?: () => void;
 }
 
 const INACTIVE_COLOR = '#8A8A94';
@@ -47,6 +49,8 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   onToggleAsset,
   isStoryboardOpen = false,
   onToggleStoryboard,
+  isElementOpen = false,
+  onToggleElement,
 }) => {
   const tabs: TabItem[] = [
     {
@@ -56,6 +60,13 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
       active: isChatOpen,
       onClick: onToggleChat,
       badge: sessionsCount > 0 ? sessionsCount : undefined,
+    },
+    {
+      id: 'elements',
+      label: 'Elemen',
+      icon: Boxes,
+      active: isElementOpen,
+      onClick: onToggleElement || (() => {}),
     },
     {
       id: 'storyboard',
@@ -107,13 +118,16 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               onClick={tab.onClick}
               aria-label={tab.label}
               aria-pressed={tab.active}
-              className={`tap shrink-0 min-w-[48px] flex flex-col items-center justify-center gap-1 py-2 px-2 transition-all duration-300 outline-none focus-visible:ring-0 ${
+              className={`tap shrink-0 min-w-[48px] flex flex-col items-center justify-center gap-1 py-2 px-2 transition-all duration-300 outline-none relative ${
                 tab.active
-                  ? `text-[#E8102D] border-b-[3px] border-[#E8102D] rounded-b-[3px]`
+                  ? `text-[#E8102D]`
                   : `text-[#8A8A94]`
               }`}
             >
               <tab.icon className="w-7 h-7 shrink-0 transition-all duration-300" />
+              {tab.active && (
+                <span className="w-7 h-1 rounded-full bg-gradient-to-r from-red-600 via-rose-500 to-red-600 shadow-sm shadow-red-500/60 mt-0.5" />
+              )}
               {tab.badge && tab.badge > 0 && (
                 <span className="absolute top-0 right-0 z-10 w-3 h-3 rounded-full bg-[#E8102D] text-[10px] font-bold text-white flex items-center justify-center" />
               )}

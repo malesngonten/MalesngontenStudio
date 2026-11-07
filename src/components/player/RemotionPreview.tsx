@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import {
   Play,
@@ -9,9 +9,11 @@ import {
   ZoomIn,
   ZoomOut,
   RefreshCw,
+  Check,
 } from 'lucide-react';
 import { TimelineData, TimelineClip } from '../../types';
 import { ShortVideoComposition } from '../../remotion/ShortVideoComposition';
+import { AspectRatioType, ASPECT_RATIOS } from '../../state/useStudioState';
 
 interface RemotionPreviewProps {
   timeline: TimelineData;
@@ -25,6 +27,7 @@ interface RemotionPreviewProps {
   onPromptElementAction?: (elementName: string, defaultAction: string) => void;
   isTimelineOpen?: boolean;
   onToggleTimeline?: () => void;
+  onChangeAspectRatio?: (ratio: AspectRatioType) => void;
 }
 
 export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
@@ -38,6 +41,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   onUpdateClipPosition,
   isTimelineOpen,
   onToggleTimeline,
+  onChangeAspectRatio,
 }) => {
   const playerRef = useRef<PlayerRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +54,15 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
   const [zoomScale, setZoomScale] = useState<number>(1.0);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isGesturing, setIsGesturing] = useState<boolean>(false);
+  const [isAspectMenuOpen, setIsAspectMenuOpen] = useState<boolean>(false);
+
+  // Current aspect ratio computed from timeline width & height
+  const currentRatio: AspectRatioType = (() => {
+    if (timeline.width === 1920 && timeline.height === 1080) return '16:9';
+    if (timeline.width === 1080 && timeline.height === 1080) return '1:1';
+    if (timeline.width === 1080 && timeline.height === 1350) return '4:5';
+    return '9:16';
+  })();
 
   // Touch gesture tracking references
   const gestureRef = useRef<{
@@ -90,11 +103,68 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
     currentY: number;
   } | null>(null);
 
+  // Viewport dimensions for strictly contained aspect ratio calculation
+  const [viewportDim, setViewportDim] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => {
+      setViewportDim({
+        width: el.clientWidth,
+        height: el.clientHeight,
+      });
+    };
+    update();
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setViewportDim({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Compute exact canvas width and height that strictly fits the viewport without cropping
+  const canvasSize = useMemo(() => {
+    const vw = viewportDim.width || 360;
+    const vh = viewportDim.height || 640;
+    const padding = 12;
+    const maxW = Math.max(80, vw - padding * 2);
+    const maxH = Math.max(80, vh - padding * 2);
+
+    const targetRatio = (timeline.width || 1080) / (timeline.height || 1920);
+    const viewportRatio = maxW / maxH;
+
+    let width: number;
+    let height: number;
+
+    if (viewportRatio > targetRatio) {
+      // Viewport is wider than target -> height is the constraint
+      height = maxH;
+      width = Math.round(height * targetRatio);
+    } else {
+      // Viewport is taller than target -> width is the constraint
+      width = maxW;
+      height = Math.round(width / targetRatio);
+    }
+
+    return { width, height };
+  }, [viewportDim.width, viewportDim.height, timeline.width, timeline.height]);
+
   // Reset zoom & pan helper
   const handleResetZoom = useCallback(() => {
     setZoomScale(1.0);
     setPanOffset({ x: 0, y: 0 });
   }, []);
+
+  // Reset zoom and pan whenever aspect ratio changes to prevent cropping
+  useEffect(() => {
+    handleResetZoom();
+  }, [timeline.width, timeline.height, handleResetZoom]);
 
   // Sync external seek (timeline scrub) to playerRef
   useEffect(() => {
@@ -421,6 +491,7 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
             transformOrigin: 'center center',
             transition: isGesturing ? 'none' : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
             willChange: 'transform',
+            width: '100%',
             height: '100%',
             display: 'flex',
             alignItems: 'center',
@@ -428,11 +499,15 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
           }}
           className="relative pointer-events-auto"
         >
-          {/* Aspect Ratio 9:16 Canvas Frame (Always strictly preserves aspect ratio, Zero Borders) */}
+          {/* Dynamic Aspect Ratio Canvas Frame (Strictly auto-contained without forced phone-height cropping) */}
           <div
             ref={videoFrameRef}
-            className="h-full aspect-[9/16] bg-black shadow-[0_10px_40px_rgba(0,0,0,0.85)] relative flex items-center justify-center overflow-hidden"
-            style={{ maxHeight: '100%' }}
+            className="bg-black shadow-[0_10px_40px_rgba(0,0,0,0.85)] relative flex items-center justify-center overflow-hidden transition-all duration-200 shrink-0"
+            style={{
+              width: `${canvasSize.width}px`,
+              height: `${canvasSize.height}px`,
+              aspectRatio: `${timeline.width} / ${timeline.height}`,
+            }}
           >
             {/* Remotion Player Engine */}
             <Player
@@ -474,10 +549,10 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
                       transform: 'translate(-50%, -50%)',
                       touchAction: 'none',
                     }}
-                    className={`cursor-move select-none z-30 ${
+                    className={`cursor-move select-none z-30 rounded-full transition-all ${
                       isSelected
-                        ? 'ring-2 ring-red-500/70 rounded-full'
-                        : 'hover:ring-1 hover:ring-white/30 rounded-full'
+                        ? 'shadow-lg shadow-red-500/50 bg-red-500/20'
+                        : 'hover:bg-white/10'
                     }`}
                   >
                     <div className="p-1 relative">
@@ -533,6 +608,60 @@ export const RemotionPreview: React.FC<RemotionPreviewProps> = ({
 
         {/* Right: Quick actions (Track toggle, Zoom Reset, Rewind, Fullscreen) */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Aspect Ratio Switcher Dropdown */}
+          {onChangeAspectRatio && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsAspectMenuOpen((prev) => !prev)}
+                title={`Ubah Rasio Aspek Video (Saat ini: ${currentRatio})`}
+                className="tap px-2.5 py-1 rounded-full bg-zinc-850/80 hover:bg-zinc-750 text-zinc-300 hover:text-white flex items-center gap-1 text-xs font-semibold font-mono transition-all"
+              >
+                <span>{currentRatio}</span>
+                <span className="text-[10px] text-zinc-500">⌵</span>
+              </button>
+
+              {isAspectMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsAspectMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full mb-2 right-0 z-50 w-44 bg-gradient-to-b from-[#181822] to-[#111116] rounded-2xl p-1.5 shadow-2xl space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="px-2.5 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Aspek Rasio
+                    </div>
+                    {(Object.keys(ASPECT_RATIOS) as AspectRatioType[]).map((r) => {
+                      const cfg = ASPECT_RATIOS[r];
+                      const isCur = r === currentRatio;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => {
+                            onChangeAspectRatio(r);
+                            setIsAspectMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-between transition-all ${
+                            isCur
+                              ? 'bg-red-600 text-white shadow-xs'
+                              : 'text-zinc-300 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span>{r}</span>
+                            <span className="text-[9px] font-normal opacity-75">{cfg.description}</span>
+                          </div>
+                          {isCur && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Zoom quick reset / status button */}
           <button
             type="button"

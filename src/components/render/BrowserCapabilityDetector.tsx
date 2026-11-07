@@ -100,7 +100,7 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
 
   if (isChecking) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a20] border border-white/5">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a20] shadow-xs">
         <div className="w-2 h-2 rounded-full bg-[#8b8b94] animate-pulse" />
         <span className="text-[10px] text-[#8b8b94]">
           Memeriksa dukungan browser…
@@ -172,10 +172,10 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
     <div className="space-y-2">
       {/* Status header */}
       <div
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${
           result.canRender
-            ? 'bg-green-900/20 border-green-500/30'
-            : 'bg-red-900/20 border-red-500/30'
+            ? 'bg-emerald-950/40 text-emerald-300'
+            : 'bg-rose-950/40 text-rose-300'
         }`}
       >
         {result.canRender ? (
@@ -196,7 +196,7 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
 
       {/* Codec info */}
       {result.canRender && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#1a1a20] border border-white/5">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#1a1a20] shadow-xs">
           <div className="flex items-center gap-2">
             <Chrome className="w-3 h-3 text-[#f2f2f3]/50" />
             <span className="text-[10px] text-[#8b8b94]">
@@ -214,7 +214,7 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
 
       {/* Blocking issues */}
       {blockingIssues.length > 0 && (
-        <div className="px-3 py-2 rounded-lg bg-red-900/20 border border-red-500/30">
+        <div className="px-3 py-2 rounded-lg bg-red-950/40 shadow-sm">
           <div className="flex items-start gap-2 mb-1">
             <ShieldAlert className="w-3 h-3 text-red-400 mt-0.5" />
             <span className="text-xs font-semibold text-red-400">
@@ -251,7 +251,7 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
 
       {/* Warnings */}
       {warningIssues.length > 0 && (
-        <div className="px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-500/30">
+        <div className="px-3 py-2 rounded-lg bg-amber-950/40 shadow-sm">
           <div className="flex items-start gap-2 mb-1">
             <Info className="w-3 h-3 text-amber-400 mt-0.5" />
             <span className="text-xs font-semibold text-amber-400">
@@ -271,20 +271,20 @@ export const BrowserCapabilityDetector: React.FC<BrowserCapabilityDetectorProps>
 
       {/* Browser recommendations when not supported */}
       {!result.canRender && (
-        <div className="px-3 py-2 rounded-lg bg-[#1a1a20] border border-white/10">
+        <div className="px-3 py-2 rounded-lg bg-[#1a1a20] shadow-md">
           <span className="text-[10px] font-semibold text-[#f2f2f3] block mb-1">
             Browser yang direkomendasikan:
           </span>
           <div className="flex gap-2">
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94] border border-white/5">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94]">
               <Chrome className="w-3 h-3" />
               <span>Chrome 94+</span>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94] border border-white/5">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94]">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 2 2 22 22 22"/></svg>
               <span>Firefox 130+</span>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94] border border-white/5">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#28282e] text-[10px] text-[#8b8b94]">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7s4-1 6 0 6 1 6-1h-1c0 2-2 4-4 4s-4-2-4-4h-1c0 2-2 4-4 4s-4-2-4-4z"/><path d="M9 18v2H4c0-1 1-1 1-1h2c1 0 1-1 1-1z"/></svg>
               <span>Safari 26+</span>
             </div>

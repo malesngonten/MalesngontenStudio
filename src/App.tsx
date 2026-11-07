@@ -19,6 +19,17 @@ import { BottomToolbar } from './components/toolbar/BottomToolbar';
 import { UnifiedSettingsSheet } from './components/settings/UnifiedSettingsSheet';
 import { Toast } from './components/ui/Toast';
 import { studioWorkspace } from './services/WorkspaceService';
+import { ElementLibrarySheet } from './components/elements/ElementLibrarySheet';
+import {
+  getInstalledElementSlugs,
+  saveInstalledElementSlugs,
+} from './remotion/elements/registry';
+import { RemotionElementDefinition, ElementCategory } from './remotion/elements/types';
+import {
+  useAutoSaveWorkspace,
+  loadSavedFilesState,
+  FILES_STORAGE_KEY,
+} from './hooks/useAutoSaveWorkspace';
 import { X, Sparkles, MessageSquare } from 'lucide-react';
 
 const COMPOSITION_SAMPLE_CODE = `// ShortVideoComposition.tsx
@@ -90,6 +101,8 @@ export default function App() {
     toast,
     showToast,
     hideToast,
+    handleChangeAspectRatio,
+    handleInsertTimelineClip,
   } = useStudioState();
 
   // Handle client-side render complete (blob URL from browser)
@@ -97,14 +110,21 @@ export default function App() {
     showToast(`Render client-side selesai: ${fileName} (${(size / 1024 / 1024).toFixed(2)} MB)`);
   }, [showToast]);
 
-  // Timeline overlay visibility (floating sheet on top of player)
+  // Timeline overlay visibility & resizable height (floating sheet on top of player)
   const [isTimelineVisible, setIsTimelineVisible] = useState<boolean>(false);
+  const [timelineHeight, setTimelineHeight] = useState<number>(190);
+  const [isDraggingTimeline, setIsDraggingTimeline] = useState<boolean>(false);
 
   // Overlay sheets — Remotion Player stays visible behind these
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isCodeSheetOpen, setIsCodeSheetOpen] = useState<boolean>(false);
   const [isAssetSheetOpen, setIsAssetSheetOpen] = useState<boolean>(false);
   const [isStoryboardSheetOpen, setIsStoryboardSheetOpen] = useState<boolean>(false);
+  const [isElementSheetOpen, setIsElementSheetOpen] = useState<boolean>(false);
+  const [elementLibraryCategory, setElementLibraryCategory] = useState<'all' | ElementCategory>('all');
+  const [installedElementSlugs, setInstalledElementSlugs] = useState<string[]>(() =>
+    getInstalledElementSlugs()
+  );
 
   // Modals / Drawers
   const [isRenderOpen, setIsRenderOpen] = useState(false);
@@ -116,13 +136,42 @@ export default function App() {
   // Pre-filled prompt from canvas element action
   const [prefilledPrompt, setPrefilledPrompt] = useState<string>('');
 
-  // Code editor state
+  // Code editor state (hydrated from localStorage if available)
   const [activeFile, setActiveFile] = useState('ShortVideoComposition.tsx');
-  const [filesState, setFilesState] = useState<Record<string, string>>({
-    'ShortVideoComposition.tsx': COMPOSITION_SAMPLE_CODE,
-    'timeline.json': JSON.stringify(timeline, null, 2),
-    'GEMINI.md': '# ATURAN PROYEK MALES NGONTEN STUDIO\n1. Format 9:16 portrait (1080x1920)\n2. Pacing cepat 1.5 - 2.5 detik per klip\n3. Animasi spring dengan damping Remotion.',
-  });
+  const [filesState, setFilesState] = useState<Record<string, string>>(() =>
+    loadSavedFilesState({
+      'ShortVideoComposition.tsx': COMPOSITION_SAMPLE_CODE,
+      'timeline.json': JSON.stringify(timeline, null, 2),
+      'GEMINI.md': '# ATURAN PROYEK MALES NGONTEN STUDIO\n1. Format 9:16 portrait (1080x1920)\n2. Pacing cepat 1.5 - 2.5 detik per klip\n3. Animasi spring dengan damping Remotion.',
+    })
+  );
+
+  // Periodically save timeline & filesState to localStorage
+  useAutoSaveWorkspace(timeline, filesState, 5000);
+
+  // Install Element TSX to workspace files & persist
+  const handleInstallElementToWorkspace = useCallback(
+    (element: RemotionElementDefinition) => {
+      const fileName = `${element.slug}.element.tsx`;
+      setFilesState((prev) => ({
+        ...prev,
+        [fileName]: element.sourceCode,
+      }));
+      setInstalledElementSlugs((prev) => {
+        if (prev.includes(element.slug)) return prev;
+        const updated = [...prev, element.slug];
+        saveInstalledElementSlugs(updated);
+        return updated;
+      });
+      fetch(`/api/files/${encodeURIComponent(fileName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: element.sourceCode }),
+      }).catch(() => {});
+      showToast(`Komponen "${element.displayName}" berhasil dipasang ke proyek Remotion!`);
+    },
+    [showToast]
+  );
 
   // Play/pause toggle
   const handlePlayPauseToggle = useCallback(() => {
@@ -230,32 +279,75 @@ export default function App() {
           }}
           isTimelineOpen={isTimelineVisible}
           onToggleTimeline={handleToggleTimeline}
+          onChangeAspectRatio={handleChangeAspectRatio}
         />
 
-        {/* Timeline overlay (float on top of player, bottom area) */}
+        {/* Timeline overlay (float on top of player, bottom area, draggable top edge) */}
         {isTimelineVisible && (
           <div
-            className="absolute bottom-[80px] left-0 right-0 h-[180px] overflow-y-auto bg-gradient-to-b from-[#14141c]/90 to-[#0a0a0e]/90 backdrop-blur-md p-2 z-30 animate-in slide-in-from-bottom duration-150 border-t border-white/10"
+            style={{ height: `${timelineHeight}px` }}
+            className={`absolute bottom-[80px] left-0 right-0 flex flex-col overflow-hidden bg-gradient-to-b from-[#14141c]/95 to-[#0a0a0e]/95 backdrop-blur-md z-30 shadow-2xl ${
+              isDraggingTimeline ? '' : 'transition-[height] duration-150 ease-out'
+            }`}
           >
-            <div className="flex items-center justify-between px-3 py-1 text-xs text-zinc-400">
-              <span className="font-semibold text-white">Track Timeline</span>
-              <button
-                type="button"
-                onClick={() => setIsTimelineVisible(false)}
-                className="tap w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                title="Tutup Timeline"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            {/* Unified Top-Edge & Header Title Drag Handle for Resizing Timeline */}
+            <div
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setIsDraggingTimeline(true);
+                const startY = e.clientY;
+                const startH = timelineHeight;
+                const onMove = (ev: PointerEvent) => {
+                  const delta = startY - ev.clientY;
+                  const next = Math.max(120, Math.min(440, startH + delta));
+                  setTimelineHeight(next);
+                };
+                const onUp = () => {
+                  setIsDraggingTimeline(false);
+                  window.removeEventListener('pointermove', onMove);
+                  window.removeEventListener('pointerup', onUp);
+                  window.removeEventListener('pointercancel', onUp);
+                };
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+                window.addEventListener('pointercancel', onUp);
+              }}
+              className="w-full cursor-ns-resize touch-none select-none shrink-0 group"
+              title="Geser area header ini ke atas/bawah untuk ubah tinggi timeline"
+            >
+              <div className="w-full pt-2 pb-1 flex flex-col items-center">
+                <div
+                  className={`w-10 h-1 rounded-full transition-colors ${
+                    isDraggingTimeline ? 'bg-[#ff1744]' : 'bg-white/25 group-hover:bg-white/45'
+                  }`}
+                />
+              </div>
+
+              <div className="flex items-center justify-between px-3 pb-1.5 text-xs text-zinc-400">
+                <span className="font-semibold text-white">Track Timeline</span>
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setIsTimelineVisible(false)}
+                  className="tap w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title="Tutup Timeline"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <Timeline
-              timeline={timeline}
-              currentFrame={currentFrame}
-              onSeek={handleFrameUpdate}
-              selectedClipId={selectedClipId}
-              onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
-              onUpdateClipTiming={handleUpdateClipTiming}
-            />
+
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pb-2">
+              <Timeline
+                timeline={timeline}
+                currentFrame={currentFrame}
+                onSeek={handleFrameUpdate}
+                selectedClipId={selectedClipId}
+                onSelectClip={(clip, layer) => handleSelectClip(layer.id, clip.id)}
+                onUpdateClipTiming={handleUpdateClipTiming}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -289,72 +381,20 @@ export default function App() {
         title="Ekspor Video Remotion MP4"
         subtitle="Rendering deterministik lokal via Remotion CLI"
       >
-        <div className="h-[55vh]">
-          <RenderTab
-            currentJob={currentRenderJob}
-            completedJobs={completedRenderJobs}
-            onStartRender={handleStartRender}
-            onCancelRender={handleCancelRender}
-            onDeleteRender={handleDeleteRender}
-            timeline={timeline}
-            onClientRenderComplete={handleClientRenderComplete}
-          />
-        </div>
-      </BottomSheet>
-
-      {/* Settings / Open Source Info Modal */}
-      <BottomSheet
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        title="Tentang Males Ngonten Studio"
-        subtitle="Studio Pembuatan Video Berbasis AI Coding Agent & Remotion Engine"
-      >
-        <div className="space-y-4 text-xs text-zinc-400">
-          <div className="flex items-center gap-3 p-3.5 bg-zinc-900/80 rounded-2xl border border-white/5">
-            <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#c92a2a] shrink-0 flex items-center justify-center shadow-md">
-              <img
-                src="/assets/aistudio/Black_Cat_Animals___Pets_Logo_20261024_034747_0000_d2a38d28.png"
-                alt="Males Ngonten Logo"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div>
-              <p className="font-bold text-white text-sm">Males Ngonten Studio</p>
-              <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
-                v1.0 • Protokol ACP (Agent Client Protocol)
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-zinc-900/40 rounded-2xl border border-white/5 space-y-2">
-            <p className="font-semibold text-white">Konsep AI Studio:</p>
-            <p className="leading-relaxed">
-              Males Ngonten Studio dirancang agar pengguna cukup memberikan instruksi natural
-              kepada AI Agent. AI Agent secara langsung mengubah komposisi kode Remotion secara
-              deklaratif, memperbarui preview secara real-time, dan merender video MP4 berkualitas
-              tinggi secara lokal di perangkat Anda.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
-              <span className="text-zinc-500">Video Engine:</span>
-              <p className="font-semibold text-white mt-1">Remotion v4.0</p>
-            </div>
-            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
-              <span className="text-zinc-500">Agent Protocol:</span>
-              <p className="font-semibold text-white mt-1">ACP JSON-RPC stdio</p>
-            </div>
-            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
-              <span className="text-zinc-500">Target Output:</span>
-              <p className="font-semibold text-white mt-1">9:16 Shorts / TikTok</p>
-            </div>
-            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
-              <span className="text-zinc-500">Target Device:</span>
-              <p className="font-semibold text-white mt-1">Termux + Ubuntu ARM64</p>
-            </div>
-          </div>
-        </div>
+        <RenderTab
+          currentJob={currentRenderJob}
+          completedJobs={completedRenderJobs}
+          onStartRender={handleStartRender}
+          onCancelRender={handleCancelRender}
+          onDeleteRender={handleDeleteRender}
+          timeline={timeline}
+          onClientRenderComplete={handleClientRenderComplete}
+          onOpenElementLibrary={(cat) => {
+            setElementLibraryCategory(cat || 'Komponen Pengguna');
+            setIsRenderOpen(false);
+            setIsElementSheetOpen(true);
+          }}
+        />
       </BottomSheet>
 
       {/* Chat / Obrolan Sheet — overlay di atas player, bisa di-drag untuk mengubah tinggi */}
@@ -363,8 +403,9 @@ export default function App() {
         onClose={() => setIsChatSheetOpen(false)}
         title="Obrolan AI"
         subtitle="Ketik perintah untuk mengedit dan merender video Remotion"
+        noPadding
       >
-        <div className="flex-1 min-h-0 h-full">
+        <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
           <ChatPanel
             messages={messages}
             isAgentWorking={
@@ -378,7 +419,10 @@ export default function App() {
             selectedClipName={selectedClip?.name}
             prefilledPrompt={prefilledPrompt}
             onClose={() => setIsChatSheetOpen(false)}
-            onOpenSettings={() => setIsAiSettingsOpen(true)}
+            onOpenSettings={() => {
+              setIsChatSheetOpen(false);
+              setIsSettingsOpen(true);
+            }}
             byokModelId={agentSettings.modelId}
             isByokConfigured={Boolean(agentSettings.apiBaseUrl && agentSettings.modelId)}
             streamingMessageId={streamingMessageId}
@@ -393,19 +437,18 @@ export default function App() {
         onClose={() => setIsCodeSheetOpen(false)}
         title="Kode Remotion TSX"
         subtitle="Edit komposisi video secara deklaratif"
+        noPadding
       >
-        <div className="p-3 sm:p-4">
-          <div className="w-full h-full rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-            <CodeEditorPanel
-              files={filesState}
-              activeFile={activeFile}
-              onSelectFile={(f) => setActiveFile(f)}
-              onSaveFile={(f, content) =>
-                setFilesState((prev) => ({ ...prev, [f]: content }))
-              }
-              isAgentEditingFile={agentStatus !== 'idle'}
-            />
-          </div>
+        <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
+          <CodeEditorPanel
+            files={filesState}
+            activeFile={activeFile}
+            onSelectFile={(f) => setActiveFile(f)}
+            onSaveFile={(f, content) =>
+              setFilesState((prev) => ({ ...prev, [f]: content }))
+            }
+            isAgentEditingFile={agentStatus !== 'idle'}
+          />
         </div>
       </BottomSheet>
 
@@ -415,33 +458,30 @@ export default function App() {
         onClose={() => setIsAssetSheetOpen(false)}
         title="Aset Media"
         subtitle="Gambar, video, audio, dan font untuk video Anda"
+        noPadding
       >
-        <div className="p-3 sm:p-4 min-h-0">
-          <div className="max-w-4xl mx-auto">
-            <AssetTab
-              assets={assets}
-              onUploadAssets={handleUploadAssets}
-              onDeleteAsset={async (id) => {
-                try {
-                  const updated = await studioWorkspace.deleteAsset(id);
-                  setAssets(updated);
-                } catch (e) {
-                  console.error('Failed to delete asset on server:', e);
-                  showToast('Gagal menghapus aset. Aset tetap ada dan data tidak berubah.');
-                }
-              }}
-              onUseAssetInChat={(asset: ProjectAsset) => {
-                setIsChatSheetOpen(true);
-                handleSendMessage(
-                  `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
-                  []
-                );
-              }}
-              usedBytes={totalAssetsSize}
-              maxBytes={500 * 1024 * 1024}
-            />
-          </div>
-        </div>
+        <AssetTab
+          assets={assets}
+          onUploadAssets={handleUploadAssets}
+          onDeleteAsset={async (id) => {
+            try {
+              const updated = await studioWorkspace.deleteAsset(id);
+              setAssets(updated);
+            } catch (e) {
+              console.error('Failed to delete asset on server:', e);
+              showToast('Gagal menghapus aset. Aset tetap ada dan data tidak berubah.');
+            }
+          }}
+          onUseAssetInChat={(asset: ProjectAsset) => {
+            setIsChatSheetOpen(true);
+            handleSendMessage(
+              `Tolong gunakan aset media "${asset.name}" sebagai background di video`,
+              []
+            );
+          }}
+          usedBytes={totalAssetsSize}
+          maxBytes={500 * 1024 * 1024}
+        />
       </BottomSheet>
 
       {/* Storyboard Sheet — overlay di atas player */}
@@ -450,8 +490,9 @@ export default function App() {
         onClose={() => setIsStoryboardSheetOpen(false)}
         title="Storyboard & Scene Cards"
         subtitle="Atur urutan adegan dan klip video"
+        noPadding
       >
-        <div className="p-3 sm:p-4 min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
           <StoryboardView
             timeline={timeline}
             currentFrame={currentFrame}
@@ -485,6 +526,9 @@ export default function App() {
         }
         onResetAll={() => {
           handleResetStudio();
+          try {
+            localStorage.removeItem(FILES_STORAGE_KEY);
+          } catch {}
           setPrefilledPrompt('');
           setActiveFile('ShortVideoComposition.tsx');
           setFilesState({
@@ -500,6 +544,37 @@ export default function App() {
           setIsAiSettingsOpen(false);
         }}
       />
+
+      {/* Reusable Element Library Sheet — overlay di atas player */}
+      <BottomSheet
+        isOpen={isElementSheetOpen}
+        onClose={() => setIsElementSheetOpen(false)}
+        title="Reusable Element Library"
+        subtitle="Koleksi komponen video Remotion siap pakai dengan Live Preview & Props Editor"
+        noPadding
+      >
+        <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
+          <ElementLibrarySheet
+            timeline={timeline}
+            onInsertElementToTimeline={(clip, layerName) => {
+              handleInsertTimelineClip(clip, layerName);
+              setIsElementSheetOpen(false);
+            }}
+            onInstallElementToWorkspace={handleInstallElementToWorkspace}
+            installedSlugs={installedElementSlugs}
+            onOpenCodeEditor={(f) => {
+              setActiveFile(f);
+              setIsElementSheetOpen(false);
+              setIsCodeSheetOpen(true);
+            }}
+            onOpenRender={() => {
+              setIsElementSheetOpen(false);
+              setIsRenderOpen(true);
+            }}
+            initialCategory={elementLibraryCategory}
+          />
+        </div>
+      </BottomSheet>
 
       {/* 4. Fixed Bottom Navigation Bar — tombol fitur buka overlay sheet */}
       <BottomToolbar
@@ -518,6 +593,8 @@ export default function App() {
         onToggleAsset={() => setIsAssetSheetOpen((prev) => !prev)}
         isStoryboardOpen={isStoryboardSheetOpen}
         onToggleStoryboard={() => setIsStoryboardSheetOpen((prev) => !prev)}
+        isElementOpen={isElementSheetOpen}
+        onToggleElement={() => setIsElementSheetOpen((prev) => !prev)}
       />
     </div>
   );

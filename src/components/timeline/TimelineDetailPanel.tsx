@@ -177,7 +177,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                     dir="ltr"
                     value={editingText}
                     onChange={(e) => handleTextChange(e.target.value)}
-                    className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-full px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-[#e5484d] text-left [direction:ltr] select-text shadow-inner"
+                    className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-full px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden text-left [direction:ltr] select-text shadow-inner"
                     placeholder="Ketik teks yang ingin dimunculkan..."
                   />
                 </div>
@@ -233,10 +233,10 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                         type="button"
                         onClick={() => handleColorChange(c.color)}
                         style={{ backgroundColor: c.color }}
-                        className={`w-6 h-6 rounded-full border-2 transition-transform active:scale-90 ${
+                        className={`w-6 h-6 rounded-full transition-all active:scale-90 ${
                           (selectedClip.props?.color || '#ffffff') === c.color
-                            ? 'border-white scale-110 shadow-md'
-                            : 'border-transparent'
+                            ? 'scale-110 shadow-lg shadow-white/40'
+                            : 'opacity-70 hover:opacity-100'
                         }`}
                         title={c.label}
                       />
@@ -340,7 +340,7 @@ export const TimelineDetailPanel: React.FC<TimelineDetailPanelProps> = ({
                       style={{
                         borderRadius: isMulti ? '16px' : '9999px',
                       }}
-                      className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden focus:ring-1 focus:ring-red-500/50 resize-none shadow-inner transition-[border-radius,height] duration-200 ease-out"
+                      className="w-full bg-gradient-to-r from-zinc-900 to-zinc-800 px-3.5 py-2 text-xs text-[#f2f2f3] focus:outline-hidden resize-none shadow-inner transition-[border-radius,height] duration-200 ease-out"
                       placeholder="Ketik teks narasi..."
                     />
                   );

@@ -24,6 +24,18 @@ import {
 import { studioAgentClient } from '../services/HttpAgentAdapter';
 import { studioWorkspace } from '../services/WorkspaceService';
 
+export type AspectRatioType = '9:16' | '16:9' | '1:1' | '4:5';
+
+export const ASPECT_RATIOS: Record<
+  AspectRatioType,
+  { label: string; width: number; height: number; description: string }
+> = {
+  '9:16': { label: '9:16', width: 1080, height: 1920, description: 'Shorts / TikTok / Reels' },
+  '16:9': { label: '16:9', width: 1920, height: 1080, description: 'YouTube / Landscape' },
+  '1:1': { label: '1:1', width: 1080, height: 1080, description: 'Square / Feed' },
+  '4:5': { label: '4:5', width: 1080, height: 1350, description: 'Portrait Feed' },
+};
+
 export const INITIAL_STUDIO_TIMELINE: TimelineData = {
   fps: 30,
   durationInFrames: 150, // 5 seconds
@@ -426,6 +438,56 @@ export function useStudioState() {
     setSelectedClipId(clipId);
   }, []);
 
+  // Change Remotion Player aspect ratio directly
+  const handleChangeAspectRatio = useCallback(
+    (ratio: AspectRatioType) => {
+      const config = ASPECT_RATIOS[ratio];
+      if (!config) return;
+      setTimeline((prev) => {
+        const next = {
+          ...prev,
+          width: config.width,
+          height: config.height,
+        };
+        syncTimelineToWorkspace(next);
+        return next;
+      });
+      showToast(`Aspek rasio Remotion diubah ke ${ratio} (${config.width}x${config.height})`);
+    },
+    [syncTimelineToWorkspace, showToast]
+  );
+
+  // Insert a reusable element clip into active timeline
+  const handleInsertTimelineClip = useCallback(
+    (clip: TimelineClip, layerName: string = 'Layer Elemen') => {
+      setTimeline((prev) => {
+        let targetLayer = prev.layers.find((l) => l.type === 'element' || l.name === layerName);
+        let nextLayers: TimelineLayer[];
+
+        if (targetLayer) {
+          nextLayers = prev.layers.map((l) =>
+            l.id === targetLayer!.id ? { ...l, clips: [...l.clips, clip] } : l
+          );
+        } else {
+          const newLayer: TimelineLayer = {
+            id: `layer-el-${Date.now()}`,
+            type: 'element',
+            name: layerName,
+            clips: [clip],
+          };
+          nextLayers = [...prev.layers, newLayer];
+        }
+
+        const next = { ...prev, layers: nextLayers };
+        syncTimelineToWorkspace(next);
+        return next;
+      });
+      setSelectedClipId(clip.id);
+      showToast(`Elemen "${clip.name}" berhasil dimasukkan ke timeline video!`);
+    },
+    [syncTimelineToWorkspace, showToast]
+  );
+
   // Send message to AI Agent
   const handleSendMessage = useCallback(
     async (text: string, attachments: AgentAttachment[] = []) => {
@@ -800,5 +862,7 @@ export function useStudioState() {
     DEFAULT_ASSETS,
     isBackendAvailable,
     streamingMessageId,
+    handleChangeAspectRatio,
+    handleInsertTimelineClip,
   };
 }

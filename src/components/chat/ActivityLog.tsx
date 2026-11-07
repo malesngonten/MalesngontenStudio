@@ -28,7 +28,7 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
   };
 
   return (
-    <div className="my-2 bg-[#18181b] border border-[#27272c] rounded-xl overflow-hidden select-none">
+    <div className="my-2 bg-[#18181b] rounded-xl overflow-hidden select-none shadow-md">
       {/* Header bar toggle */}
       <button
         type="button"
@@ -58,11 +58,11 @@ export const ActivityLog: React.FC<ActivityLogProps> = ({ logs }) => {
 
       {/* Expanded tool log items */}
       {isOpen && (
-        <div className="p-2.5 pt-0 border-t border-[#27272c] flex flex-col gap-1.5 bg-[#0e0e10]/50 font-mono text-[11px]">
+        <div className="p-2.5 pt-0 flex flex-col gap-1.5 bg-[#0e0e10]/50 font-mono text-[11px]">
           {logs.map((log) => (
             <div
               key={log.id}
-              className="flex items-center justify-between p-1.5 rounded-lg bg-[#18181b] border border-[#27272c]/60"
+              className="flex items-center justify-between p-1.5 rounded-lg bg-[#18181b] shadow-xs"
             >
               <div className="flex items-center gap-2 min-w-0">
                 {getToolIcon(log.toolName)}

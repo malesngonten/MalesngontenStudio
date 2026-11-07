@@ -2,7 +2,7 @@
  * Studio Hermes Remotion - Core Types
  */
 
-export type LayerType = 'video' | 'text' | 'narration' | 'music';
+export type LayerType = 'video' | 'text' | 'narration' | 'music' | 'element';
 
 export interface TimelineClip {
   id: string;
@@ -10,6 +10,8 @@ export interface TimelineClip {
   duration: number; // in frames
   name: string;
   assetId?: string;
+  elementSlug?: string;
+  elementProps?: Record<string, any>;
   props?: {
     text?: string;
     fontSize?: number;
@@ -22,6 +24,7 @@ export interface TimelineClip {
     animation?: 'fade' | 'slide-up' | 'zoom' | 'bounce' | 'typewriter';
     src?: string;
     speaker?: string;
+    [key: string]: any;
   };
 }
 

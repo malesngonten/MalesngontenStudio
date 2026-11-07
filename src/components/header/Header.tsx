@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 3. AI Status Indicator — floating overlay layer above control layer (tengah atas, tidak mendorong tombol) */}
       <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 flex items-center">
-        <div className="flex items-center justify-center p-1.5 rounded-full bg-zinc-900/90 shadow-xs border border-white/10">
+        <div className="flex items-center justify-center p-1.5 rounded-full bg-zinc-900/90 shadow-md">
           {getStatusDot()}
         </div>
       </div>

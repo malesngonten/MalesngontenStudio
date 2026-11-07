@@ -232,7 +232,6 @@ export const ClientVideoComposition: React.FC<ClientVideoCompositionProps> = ({
                   maxWidth: '90%',
                   textAlign: 'center',
                   whiteSpace: 'pre-wrap',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
                 }}
               >
@@ -262,10 +261,10 @@ export const ClientVideoComposition: React.FC<ClientVideoCompositionProps> = ({
             <div
               key={clip.id}
               style={{
-                backgroundColor: 'rgba(18, 48, 42, 0.9)',
-                border: '1px solid rgba(47, 111, 95, 1)',
+                backgroundColor: 'rgba(18, 48, 42, 0.95)',
                 padding: '8px 12px',
                 borderRadius: '9999px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',

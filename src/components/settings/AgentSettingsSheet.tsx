@@ -197,7 +197,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder="https://openrouter.ai/api/v1 atau http://localhost:11434/v1"
-            className="w-full h-9 px-3 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-red-500/50 font-mono text-[11px] transition-all"
+            className="w-full h-9 px-3 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none font-mono text-[11px] transition-all shadow-inner"
           />
 
           {/* Quick-fill template chips (does NOT set default provider/model) */}
@@ -211,7 +211,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
                   onClick={() => setBaseUrl(item.url)}
                   className={`tap text-[10px] px-2.5 py-1 rounded-full transition-all ${
                     baseUrl === item.url
-                      ? 'bg-red-600/30 text-red-300 font-semibold ring-1 ring-red-500/40'
+                      ? 'bg-red-600/30 text-red-300 font-semibold shadow-xs'
                       : 'bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-400 hover:text-zinc-200'
                   }`}
                   title={`${item.url} - ${item.hint}`}
@@ -239,7 +239,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-... (kosongkan jika provider lokal tidak membutuhkan kunci)"
-              className="w-full h-9 pl-3 pr-10 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-red-500/50 font-mono text-[11px] transition-all"
+              className="w-full h-9 pl-3 pr-10 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none font-mono text-[11px] transition-all shadow-inner"
             />
             <button
               type="button"
@@ -256,7 +256,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
         </div>
 
         {/* 4. Model ID Field */}
-        <div className="p-3.5 bg-gradient-to-br from-[#18181c] to-[#121215] rounded-2xl space-y-2">
+        <div className="p-3.5 bg-gradient-to-br from-[#18181c] to-[#121215] rounded-2xl space-y-2 shadow-sm">
           <label className="flex items-center justify-between text-xs font-semibold text-zinc-300">
             <span className="flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-cyan-400" />
@@ -270,7 +270,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
             value={modelId}
             onChange={(e) => setModelId(e.target.value)}
             placeholder="misal: deepseek-chat, gpt-4o, llama-3.3-70b-versatile, qwen-2.5-coder"
-            className="w-full h-9 px-3 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-red-500/50 font-mono text-[11px] transition-all"
+            className="w-full h-9 px-3 rounded-xl bg-zinc-900/90 text-white placeholder-zinc-500 outline-none font-mono text-[11px] transition-all shadow-inner"
           />
 
           {/* Optional sample suggestions (clickable but never defaulted) */}
@@ -292,7 +292,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
                   onClick={() => setModelId(m)}
                   className={`tap text-[10px] px-2.5 py-1 rounded-full transition-all ${
                     modelId === m
-                      ? 'bg-cyan-600/30 text-cyan-300 font-semibold ring-1 ring-cyan-500/40'
+                      ? 'bg-cyan-600/30 text-cyan-300 font-semibold shadow-xs'
                       : 'bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
@@ -310,8 +310,8 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
               testingStatus === 'loading'
                 ? 'bg-zinc-900/90 text-zinc-300'
                 : testingStatus === 'success'
-                ? 'bg-emerald-950/40 text-emerald-300 ring-1 ring-emerald-500/30'
-                : 'bg-red-950/40 text-rose-300 ring-1 ring-red-500/30'
+                ? 'bg-emerald-950/40 text-emerald-300 shadow-md'
+                : 'bg-red-950/40 text-rose-300 shadow-md'
             }`}
           >
             {testingStatus === 'loading' ? (
@@ -397,7 +397,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
         </div>
 
         {/* 7. Secondary Protocol Controls: Permission & Auto-Fix */}
-        <div className="pt-2 border-t border-white/5 space-y-3">
+        <div className="pt-2 bg-gradient-to-b from-white/5 to-transparent rounded-2xl p-2 space-y-3">
           <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
             Protokol Eksekusi Agent (ACP)
           </p>
@@ -408,7 +408,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
               onClick={() => onUpdateSettings({ permissionMode: 'ask' })}
               className={`tap p-3 rounded-2xl text-left transition-all ${
                 settings.permissionMode === 'ask'
-                  ? 'bg-gradient-to-br from-zinc-800 to-zinc-850 text-white ring-1 ring-red-500/40 shadow-md'
+                  ? 'bg-gradient-to-br from-zinc-800 to-zinc-850 text-white shadow-md'
                   : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-zinc-400 hover:from-[#202025]'
               }`}
             >
@@ -422,7 +422,7 @@ export const AgentSettingsSheet: React.FC<AgentSettingsSheetProps> = ({
               onClick={() => onUpdateSettings({ permissionMode: 'auto' })}
               className={`tap p-3 rounded-2xl text-left transition-all ${
                 settings.permissionMode === 'auto'
-                  ? 'bg-gradient-to-br from-zinc-800 to-zinc-850 text-white ring-1 ring-red-500/40 shadow-md'
+                  ? 'bg-gradient-to-br from-zinc-800 to-zinc-850 text-white shadow-md'
                   : 'bg-gradient-to-br from-[#18181c] to-[#121215] text-zinc-400 hover:from-[#202025]'
               }`}
             >

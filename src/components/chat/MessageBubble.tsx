@@ -48,26 +48,47 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div
-      className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-2 min-w-0 max-w-full`}
+      className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-2.5 px-1.5 min-w-0 max-w-full`}
     >
       {/* Avatar AI di kiri bubble, align atas, tidak ikut menyusut (hanya untuk AI) */}
       {!isUser && (
         <div className="shrink-0 flex-none mt-0">
-          <div className="w-8 h-8 rounded-full bg-[#e8112d] flex-none grid place-items-center">
+          <div className="w-8 h-8 rounded-full bg-[#e8112d] flex-none grid place-items-center shadow-md shadow-red-950/50">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
         </div>
       )}
 
-      {/* Bubble pesan */}
+      {/* Bubble pesan dengan tanda arrow komunikasi */}
       <div
-        className={`min-w-0 w-fit max-w-[85%] p-3 rounded-[20px] text-left ${!isUser ? 'mr-4' : ''} ${
-          isStreaming ? 'flex-auto w-full' : ''
-        } ${isUser
-          ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white'
-          : 'bg-[#1c1c24] text-zinc-100'
+        className={`relative min-w-0 w-fit max-w-[85%] px-3.5 py-2.5 rounded-[18px] text-left shadow-md ${
+          !isUser ? 'mr-4 rounded-tl-[4px]' : 'rounded-tr-[4px]'
+        } ${isStreaming ? 'flex-auto w-full' : ''} ${
+          isUser
+            ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white'
+            : 'bg-[#1c1c24] text-zinc-100'
         }`}
       >
+        {/* Speech arrow / tail */}
+        {isUser ? (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 8 12"
+            fill="none"
+            className="absolute -right-[7px] top-2.5 w-2 h-3 pointer-events-none"
+          >
+            <path d="M0 0L8 4.5L0 10V0Z" fill="#ef4444" />
+          </svg>
+        ) : (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 8 12"
+            fill="none"
+            className="absolute -left-[7px] top-2.5 w-2 h-3 pointer-events-none"
+          >
+            <path d="M8 0L0 4.5L8 10V0Z" fill="#1c1c24" />
+          </svg>
+        )}
         {/* Lampiran user */}
         {!isUser && msg.attachments && msg.attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2.5">
@@ -146,10 +167,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
             {/* Tool results — output dari eksekusi AI agent */}
             {messageToolCalls.length > 0 && (
-              <div className="mt-3 pt-2 border-t border-zinc-800/50">
+              <div className="mt-3 pt-2 bg-gradient-to-b from-white/5 to-transparent rounded-xl p-2">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Terminal className="w-3 h-3 text-zinc-500" />
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
                     Tool Results
                   </span>
                 </div>
@@ -162,12 +183,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     return (
                       <div
                         key={tc.id}
-                        className={`p-2 rounded-lg border ${
+                        className={`p-2 rounded-lg ${
                           status === 'running'
-                            ? 'border-zinc-700 bg-zinc-900/40'
+                            ? 'bg-zinc-900/60'
                             : status === 'completed'
-                            ? 'border-emerald-500/30 bg-emerald-950/10'
-                            : 'border-rose-500/30 bg-rose-950/10'
+                            ? 'bg-emerald-950/25'
+                            : 'bg-rose-950/25'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -186,16 +207,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                             {status === 'running' ? 'running' : status === 'completed' ? 'done' : 'failed'}
                           </span>
                         </div>
-                        <div className="text-[9px] text-zinc-300 break-all">{tc.description || JSON.stringify(tc.arguments).slice(0, 100)}</div>
+                        {(tc.description || tc.arguments) && (
+                          <div className="text-[9px] text-zinc-300 break-all">
+                            {tc.description || (tc.arguments ? JSON.stringify(tc.arguments).slice(0, 100) : '')}
+                          </div>
+                        )}
                         {result && !isFailed && (
-                          <div className="mt-1 text-[9px] text-zinc-500 break-all bg-zinc-950/40 p-1.5 rounded max-h-[60px] overflow-y-auto">
-                            {typeof result === 'object'
-                              ? JSON.stringify(result, null, 2).slice(0, 300)
+                          <div className="mt-1 text-[9px] text-zinc-400 break-all bg-black/40 p-1.5 rounded-md max-h-[60px] overflow-y-auto">
+                            {typeof result === 'object' && result !== null
+                              ? (JSON.stringify(result, null, 2) || '').slice(0, 300)
                               : String(result).slice(0, 300)}
                           </div>
                         )}
                         {isFailed && (
-                          <div className="mt-1 text-[9px] text-rose-400 break-all bg-rose-950/30 p-1.5 rounded border border-rose-500/20">
+                          <div className="mt-1 text-[9px] text-rose-300 break-all bg-rose-950/40 p-1.5 rounded-md">
                             {String(result).slice(0, 300)}
                           </div>
                         )}

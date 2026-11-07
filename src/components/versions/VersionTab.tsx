@@ -58,7 +58,7 @@ export const VersionTab: React.FC<VersionTabProps> = ({
                 <div
                   className={`absolute -left-[20px] top-1.5 w-3.5 h-3.5 rounded-full transition-all ${
                     isActive
-                      ? 'bg-[#e5484d] ring-4 ring-[#e5484d]/30 shadow-md'
+                      ? 'bg-[#e5484d] shadow-lg shadow-red-500/60 scale-110'
                       : 'bg-gradient-to-b from-[#2a2a32] to-[#1c1c22]'
                   }`}
                 />

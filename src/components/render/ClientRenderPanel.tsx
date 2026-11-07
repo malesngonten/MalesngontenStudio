@@ -114,7 +114,7 @@ export const ClientRenderPanel: React.FC<ClientRenderPanelProps> = ({
   if (browserSupported === null) {
     return (
       <div className="bg-[#18181c] rounded-3xl p-4 space-y-3 shadow-lg">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a20] border border-white/5">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1a1a20] shadow-xs">
           <div className="w-2 h-2 rounded-full bg-[#8b8b94] animate-pulse" />
           <span className="text-[10px] text-[#8b8b94]">Memeriksa dukungan browser…</span>
         </div>
@@ -124,7 +124,7 @@ export const ClientRenderPanel: React.FC<ClientRenderPanelProps> = ({
 
   if (!browserSupported) {
     return (
-      <div className="bg-[#18181c] rounded-3xl p-4 space-y-3 shadow-lg border border-red-500/20">
+      <div className="bg-gradient-to-b from-[#241215] to-[#18181c] rounded-3xl p-4 space-y-3 shadow-lg">
         <div className="flex items-start gap-2">
           <div className="w-4 h-4 text-red-400 mt-0.5">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -181,17 +181,17 @@ export const ClientRenderPanel: React.FC<ClientRenderPanelProps> = ({
 
       {/* Error */}
       {renderError && (
-        <div className="p-2 bg-red-900/20 border border-red-500/20 rounded-lg text-[10px] text-red-300">
+        <div className="p-2.5 bg-red-950/40 rounded-xl text-[10px] text-red-300 shadow-sm">
           {renderError}
         </div>
       )}
 
       {/* Success / Download */}
       {renderedUrl && (
-        <div className="p-2 bg-green-900/20 border border-green-500/20 rounded-lg">
+        <div className="p-3 bg-emerald-950/40 rounded-2xl shadow-md">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold text-green-300">Render Selesai</span>
-            <span className="text-[10px] font-mono text-green-400">
+            <span className="text-xs font-semibold text-emerald-300">Render Selesai</span>
+            <span className="text-[10px] font-mono text-emerald-400">
               {(fileSize / 1024 / 1024).toFixed(2)} MB
             </span>
           </div>

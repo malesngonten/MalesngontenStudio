@@ -48,7 +48,7 @@ export const ProjectRulesSheet: React.FC<ProjectRulesSheetProps> = ({
           style={{
             borderRadius: content.includes('\n') || content.length > 50 ? '16px' : '9999px',
           }}
-          className="w-full bg-gradient-to-b from-[#0e0e11] to-[#08080a] text-[#f2f2f3] font-code text-xs p-3.5 ring-1 ring-white/10 focus:outline-hidden focus:ring-2 focus:ring-red-500/50 resize-none select-text leading-relaxed shadow-inner transition-[border-radius] duration-200"
+          className="w-full bg-gradient-to-b from-[#0e0e11] to-[#08080a] text-[#f2f2f3] font-code text-xs p-3.5 focus:outline-hidden resize-none select-text leading-relaxed shadow-inner transition-[border-radius] duration-200"
           placeholder="Isi instruksi GEMINI.md..."
         />
 

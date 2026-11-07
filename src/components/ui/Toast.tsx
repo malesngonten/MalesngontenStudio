@@ -16,7 +16,7 @@ export const Toast: React.FC<ToastProps> = ({ open, message, onClose }) => {
 
   return (
     <div
-      className="fixed left-1/2 -translate-x-1/2 bottom-4 z-[60] max-w-xs w-[calc(100%-1rem)] flex items-center gap-2.5 px-4 py-3 rounded-full bg-zinc-900/95 border border-white/10 shadow-2xl backdrop-blur-sm text-sm font-medium text-white animate-in slide-in-from-bottom duration-200"
+      className="fixed left-1/2 -translate-x-1/2 bottom-4 z-[60] max-w-xs w-[calc(100%-1rem)] flex items-center gap-2.5 px-4 py-3 rounded-full bg-zinc-900/95 shadow-2xl backdrop-blur-sm text-sm font-medium text-white animate-in slide-in-from-bottom duration-200"
     >
       <div className="shrink-0 flex w-5 h-5 items-center justify-center rounded-full bg-red-500/20 text-red-400">
         <AlertCircle className="w-3 h-3" />

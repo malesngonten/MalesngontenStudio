@@ -33,7 +33,7 @@ const getLayerMeta = (type: string, index: number) => {
         color: 'text-rose-300',
         headerBg: 'bg-gradient-to-r from-rose-950/70 to-zinc-900/90 text-rose-200',
         clipBg: 'bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 text-white shadow-md shadow-rose-950/40',
-        clipSelectedBg: 'bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-lg ring-2 ring-white/90',
+        clipSelectedBg: 'bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-xl shadow-rose-600/50 brightness-110',
       };
     case 'text':
       return {
@@ -43,7 +43,7 @@ const getLayerMeta = (type: string, index: number) => {
         color: 'text-purple-300',
         headerBg: 'bg-gradient-to-r from-purple-950/70 to-zinc-900/90 text-purple-200',
         clipBg: 'bg-gradient-to-r from-purple-600 via-violet-500 to-indigo-600 text-white shadow-md shadow-purple-950/40',
-        clipSelectedBg: 'bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 text-white shadow-lg ring-2 ring-white/90',
+        clipSelectedBg: 'bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 text-white shadow-xl shadow-purple-600/50 brightness-110',
       };
     case 'narration':
       return {
@@ -53,7 +53,7 @@ const getLayerMeta = (type: string, index: number) => {
         color: 'text-emerald-300',
         headerBg: 'bg-gradient-to-r from-emerald-950/70 to-zinc-900/90 text-emerald-200',
         clipBg: 'bg-gradient-to-r from-emerald-600 via-teal-500 to-green-600 text-white shadow-md shadow-emerald-950/40',
-        clipSelectedBg: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 text-white shadow-lg ring-2 ring-white/90',
+        clipSelectedBg: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 text-white shadow-xl shadow-emerald-600/50 brightness-110',
       };
     case 'music':
       return {
@@ -63,7 +63,7 @@ const getLayerMeta = (type: string, index: number) => {
         color: 'text-sky-300',
         headerBg: 'bg-gradient-to-r from-sky-950/70 to-zinc-900/90 text-sky-200',
         clipBg: 'bg-gradient-to-r from-sky-600 via-blue-500 to-cyan-600 text-white shadow-md shadow-sky-950/40',
-        clipSelectedBg: 'bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-600 text-white shadow-lg ring-2 ring-white/90',
+        clipSelectedBg: 'bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-600 text-white shadow-xl shadow-sky-600/50 brightness-110',
       };
     default:
       return {
@@ -73,7 +73,7 @@ const getLayerMeta = (type: string, index: number) => {
         color: 'text-amber-300',
         headerBg: 'bg-gradient-to-r from-amber-950/70 to-zinc-900/90 text-amber-200',
         clipBg: 'bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-600 text-white shadow-md shadow-amber-950/40',
-        clipSelectedBg: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-600 text-white shadow-lg ring-2 ring-white/90',
+        clipSelectedBg: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-600 text-white shadow-xl shadow-amber-600/50 brightness-110',
       };
   }
 };
@@ -323,7 +323,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                   key={layer.id}
                   className={`h-8 w-8 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all ${
                     hasSelectedClip
-                      ? `${meta.headerBg} ring-1 ring-white/50`
+                      ? `${meta.headerBg} shadow-md`
                       : 'bg-zinc-850 hover:bg-zinc-800'
                   }`}
                   title={`${layer.name} (${meta.label})`}
@@ -409,7 +409,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                         }}
                         className={`timeline-clip-card absolute top-[2px] bottom-[2px] rounded-full flex items-center justify-between gap-1 transition-all touch-none cursor-grab active:cursor-grabbing select-none px-1.5 ${
                           isDraggingThis
-                            ? 'z-30 ring-2 ring-white scale-[1.02] shadow-2xl opacity-95'
+                            ? 'z-30 scale-[1.02] shadow-2xl opacity-95 brightness-125'
                             : isSelected
                             ? 'z-20'
                             : 'z-10 hover:z-20 hover:brightness-110'
@@ -457,7 +457,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
                         {/* Live Floating Tooltip when dragged */}
                         {isDraggingThis && (
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-zinc-900 text-white shadow-2xl px-2 py-0.5 rounded-full text-[9px] font-mono whitespace-nowrap pointer-events-none z-50 ring-1 ring-white/20">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-zinc-900 text-white shadow-2xl px-2 py-0.5 rounded-full text-[9px] font-mono whitespace-nowrap pointer-events-none z-50">
                             {startSec}s • {clipSec}s
                           </div>
                         )}
@@ -490,7 +490,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
                       className={`absolute top-[2px] bottom-[2px] rounded-full px-1.5 flex items-center text-[8.5px] font-bold truncate transition-all cursor-pointer ${
                         isSelected
-                          ? 'ring-1 ring-white z-20 text-white ' + meta.clipSelectedBg
+                          ? 'z-20 text-white shadow-md ' + meta.clipSelectedBg
                           : 'opacity-90 text-white shadow-xs ' + meta.clipBg
                       }`}
                       title={`${clip.name} (${l.name})`}

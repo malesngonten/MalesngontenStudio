@@ -14,7 +14,7 @@ import { BottomSheet } from '../ui/BottomSheet';
 import { AgentSettings } from '../../types';
 
 const StatCard: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
-  <div className="p-2 bg-zinc-900/40 rounded-xl border border-white/5">
+  <div className="p-2 bg-zinc-900/40 rounded-xl shadow-xs">
     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">{label}</div>
     <div className="text-sm font-bold text-white font-mono tabular-nums">{value}</div>
   </div>
@@ -132,13 +132,13 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
       title="Pengaturan Aplikasi"
       subtitle="Konfigurasi AI Provider, Aturan Proyek, Video & Sistem"
     >
-      <div className="space-y-4">
-        {/* Navigation Tabs (Zero Border, Soft Gradients) */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-zinc-900 overflow-x-auto no-scrollbar">
+      <div className="w-full min-w-0 space-y-4">
+        {/* Navigation Tabs (Zero Border, Soft Gradients, Scrollable on narrow screens) */}
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-zinc-900 overflow-x-auto no-scrollbar w-full">
           <button
             type="button"
             onClick={() => setActiveTab('ai')}
-            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+            className={`tap shrink-0 whitespace-nowrap py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'ai'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-white'
@@ -149,7 +149,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('rules')}
-            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+            className={`tap shrink-0 whitespace-nowrap py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'rules'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-white'
@@ -160,7 +160,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('video')}
-            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+            className={`tap shrink-0 whitespace-nowrap py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'video'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-white'
@@ -171,7 +171,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('about')}
-            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+            className={`tap shrink-0 whitespace-nowrap py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'about'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-white'
@@ -182,7 +182,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('usage')}
-            className={`tap flex-1 min-w-[70px] py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
+            className={`tap shrink-0 whitespace-nowrap py-1.5 px-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === 'usage'
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-white'
@@ -385,7 +385,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
                       ([provider, stats]: [string, any]) => (
                         <div
                           key={provider}
-                          className="flex justify-between p-1.5 bg-zinc-900/40 rounded border border-white/5"
+                          className="flex justify-between p-1.5 bg-zinc-900/40 rounded shadow-xs"
                         >
                           <span className="text-[10px] text-zinc-300">{provider}</span>
                           <span className="text-[10px] font-mono text-zinc-300">
@@ -411,7 +411,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
                         .map(([date, stats]: [string, any]) => (
                           <div
                             key={date}
-                            className="flex justify-between p-1.5 bg-zinc-900/40 rounded border border-white/5"
+                            className="flex justify-between p-1.5 bg-zinc-900/40 rounded shadow-xs"
                           >
                             <span className="text-[10px] font-mono text-zinc-300">{date}</span>
                             <span className="text-[10px] font-mono text-zinc-300">
@@ -425,7 +425,7 @@ export const UnifiedSettingsSheet: React.FC<UnifiedSettingsSheetProps> = ({
                     </div>
                   </div>
 
-                  <div className="mt-2 p-2 bg-zinc-900/40 rounded border border-white/5 text-[9px] text-zinc-500">
+                  <div className="mt-2 p-2 bg-zinc-900/40 rounded shadow-xs text-[9px] text-zinc-500">
                     Rentang: {aiUsageStats.periodStart} → {aiUsageStats.periodEnd}
                   </div>
                 </div>

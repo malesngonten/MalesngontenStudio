@@ -30,28 +30,28 @@ export const AddLayerSheet: React.FC<AddLayerSheetProps> = ({
       title: 'Teks & Motion Graphics',
       description: 'Judul, headline animasi, punchline, statistik bergerak',
       icon: <Type className="w-5 h-5 text-[#b39dff]" />,
-      color: 'border-[#b39dff]/40 bg-[#2a2440]/30',
+      color: 'bg-gradient-to-r from-[#2a2440]/60 to-[#1f1a30]/60 shadow-md',
     },
     {
       type: 'video',
       title: 'Klip Video / Background',
       description: 'Latar footage, transisi visual, overlay warna b-roll',
       icon: <Video className="w-5 h-5 text-[#7aa7ff]" />,
-      color: 'border-[#7aa7ff]/40 bg-[#1f2a3d]/30',
+      color: 'bg-gradient-to-r from-[#1f2a3d]/60 to-[#141b28]/60 shadow-md',
     },
     {
       type: 'narration',
       title: 'Narasi & Subtitle Suara',
       description: 'Voiceover sinkron, captions dinamis per frasa',
       icon: <Mic className="w-5 h-5 text-[#5fd3b0]" />,
-      color: 'border-[#5fd3b0]/40 bg-[#12302a]/30',
+      color: 'bg-gradient-to-r from-[#12302a]/60 to-[#0c1f1b]/60 shadow-md',
     },
     {
       type: 'music',
       title: 'Musik Latar & Sound FX',
       description: 'Beat pengiring, riser, swoosh, efek audio',
       icon: <Music className="w-5 h-5 text-amber-400" />,
-      color: 'border-amber-400/40 bg-amber-950/20',
+      color: 'bg-gradient-to-r from-amber-950/40 to-yellow-950/40 shadow-md',
     },
   ];
 
@@ -116,7 +116,7 @@ export const AddLayerSheet: React.FC<AddLayerSheetProps> = ({
             value={layerName}
             onChange={(e) => setLayerName(e.target.value)}
             placeholder="Contoh: Subtitle Utama, Hook Teks, Sound FX"
-            className="w-full bg-gradient-to-r from-[#18181c] to-[#121215] ring-1 ring-white/10 focus:ring-2 focus:ring-red-500/50 rounded-full px-4 py-2.5 text-xs text-[#f2f2f3] focus:outline-hidden text-left [direction:ltr] select-text shadow-inner transition-all"
+            className="w-full bg-[#18181c] rounded-full px-4 py-2.5 text-xs text-[#f2f2f3] focus:outline-hidden text-left [direction:ltr] select-text shadow-inner transition-all"
           />
         </div>
 

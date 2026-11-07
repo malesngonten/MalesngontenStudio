@@ -233,12 +233,12 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
               <>
                 {/* Readiness Score Card */}
                 <div
-                  className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                  className={`p-3.5 rounded-xl shadow-lg flex items-center justify-between ${
                     diagnostics.readinessScore === 'ready'
-                      ? 'bg-emerald-950/30 border-emerald-800/40'
+                      ? 'bg-gradient-to-r from-emerald-950/40 to-zinc-900/60'
                       : diagnostics.readinessScore === 'warning'
-                      ? 'bg-amber-950/30 border-amber-800/40'
-                      : 'bg-red-950/30 border-red-800/40'
+                      ? 'bg-gradient-to-r from-amber-950/40 to-zinc-900/60'
+                      : 'bg-gradient-to-r from-red-950/40 to-zinc-900/60'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -265,7 +265,7 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                 </div>
 
                 {/* Hardware & RAM Stats */}
-                <div className="p-3 bg-[#131317] rounded-xl border border-[#22222a] space-y-2">
+                <div className="p-3 bg-[#131317] rounded-xl shadow-md space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-white flex items-center gap-1.5">
                       <HardDrive className="w-3.5 h-3.5 text-[#e5484d]" />
@@ -296,7 +296,7 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                 </div>
 
                 {/* Binary Tools Checklist */}
-                <div className="p-3 bg-[#131317] rounded-xl border border-[#22222a] space-y-2">
+                <div className="p-3 bg-[#131317] rounded-xl shadow-md space-y-2">
                   <span className="font-semibold text-white block">
                     Dependensi Binary Host
                   </span>
@@ -338,7 +338,7 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
 
                 {/* Warnings & Recommendations */}
                 {diagnostics.warnings.length > 0 && (
-                  <div className="p-3 bg-[#1a1416] rounded-xl border border-[#e5484d]/30 space-y-2">
+                  <div className="p-3 bg-[#1a1416] rounded-xl shadow-md space-y-2">
                     <span className="font-semibold text-amber-300 flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       Catatan Kompatibilitas Android Termux
@@ -352,11 +352,11 @@ export const AgentDiscoveryDrawer: React.FC<AgentDiscoveryDrawerProps> = ({
                 )}
 
                 {/* Copyable Setup Commands */}
-                <div className="p-3 bg-[#131317] rounded-xl border border-[#22222a] space-y-2">
+                <div className="p-3 bg-[#131317] rounded-xl shadow-md space-y-2">
                   <span className="font-semibold text-white block">
                     Perintah Cepat Setup proot Ubuntu
                   </span>
-                  <div className="flex items-center justify-between gap-2 p-2 rounded bg-[#0c0c10] border border-[#222228] font-mono text-[11px] text-[#5fd3b0]">
+                  <div className="flex items-center justify-between gap-2 p-2 rounded bg-[#0c0c10] shadow-inner font-mono text-[11px] text-[#5fd3b0]">
                     <span className="truncate">apt install -y chromium-browser ffmpeg</span>
                     <button
                       type="button"

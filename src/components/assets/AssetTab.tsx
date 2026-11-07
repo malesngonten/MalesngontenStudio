@@ -82,9 +82,9 @@ export const AssetTab: React.FC<AssetTabProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0e0e10] p-4 overflow-y-auto space-y-4 select-none safe-pb">
+    <div className="flex flex-col flex-1 min-h-0 w-full bg-[#0e0e10] p-4 overflow-y-auto overflow-x-hidden space-y-4 select-none safe-pb">
       {/* 5.2 Meter Storage (Tanpa border, gradasi lembut) */}
-      <div className="bg-gradient-to-b from-[#18181c] to-[#111114] rounded-3xl p-4 space-y-2 shadow-lg">
+      <div className="shrink-0 bg-gradient-to-b from-[#18181c] to-[#111114] rounded-3xl p-4 space-y-2 shadow-lg">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-[#f2f2f3] font-semibold">
             <HardDrive className="w-4 h-4 text-[#8b8b94]" />
@@ -112,7 +112,7 @@ export const AssetTab: React.FC<AssetTabProps> = ({
       {/* Upload Dropzone (Gradasi lembut tanpa hard border) */}
       <div
         {...getRootProps()}
-        className={`rounded-3xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 shadow-md ${
+        className={`shrink-0 rounded-3xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 shadow-md ${
           isDragActive
             ? 'active-glow-card'
             : 'bg-gradient-to-b from-[#18181c] to-[#111114] hover:from-[#202026] hover:to-[#141418]'
@@ -133,7 +133,7 @@ export const AssetTab: React.FC<AssetTabProps> = ({
       </div>
 
       {/* Filter Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      <div className="shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
         {[
           { id: 'all', label: 'Semua' },
           { id: 'video', label: 'Video' },
@@ -147,6 +147,7 @@ export const AssetTab: React.FC<AssetTabProps> = ({
             size="xs"
             active={filter === item.id}
             onClick={() => setFilter(item.id as FilterType)}
+            className="shrink-0 whitespace-nowrap"
           >
             {item.label}
           </PillButton>
@@ -155,13 +156,15 @@ export const AssetTab: React.FC<AssetTabProps> = ({
 
       {/* Asset List */}
       {filteredAssets.length === 0 ? (
-        <EmptyState
-          icon={<Video className="w-6 h-6" />}
-          title="Belum Ada Asset"
-          description="Unggah file media atau lampirkan di chat agar AI agent dapat menggunakannya dalam video."
-        />
+        <div className="shrink-0">
+          <EmptyState
+            icon={<Video className="w-6 h-6" />}
+            title="Belum Ada Asset"
+            description="Unggah file media atau lampirkan di chat agar AI agent dapat menggunakannya dalam video."
+          />
+        </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="shrink-0 space-y-2.5 pb-2">
           {filteredAssets.map((asset) => (
             <div
               key={asset.id}

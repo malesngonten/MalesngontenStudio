@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Cpu,
   Clock,
+  Loader2,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -65,7 +66,7 @@ export const LiveAgentActivityCard: React.FC<LiveAgentActivityCardProps> = ({
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center shrink-0 shadow-md">
               {isWorking ? (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <Loader2 className="w-4 h-4 text-white animate-spin" />
               ) : (
                 <Sparkles className="w-3.5 h-3.5 text-white" />
               )}
@@ -149,7 +150,7 @@ export const LiveAgentActivityCard: React.FC<LiveAgentActivityCardProps> = ({
                         ) : tool.status === 'failed' ? (
                           <AlertCircle className="w-4 h-4 text-rose-400" />
                         ) : (
-                          <span className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin inline-block" />
+                          <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
                         )}
                       </div>
                       <div className="min-w-0">

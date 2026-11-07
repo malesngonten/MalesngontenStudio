@@ -127,6 +127,14 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Streaming AI indicator — konten di dalam bubble (sumber kebenaran: spesifikasi teks) */
 .sk-wrap {
   display: flex;

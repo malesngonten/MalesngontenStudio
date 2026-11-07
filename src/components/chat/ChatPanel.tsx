@@ -17,6 +17,7 @@ import {
   Sliders,
   Key,
   Mic,
+  Send,
 } from 'lucide-react';
 import { AgentMessage, AgentAttachment, AgentToolCall } from '../../contracts/agentProtocol';
 import { MessageBubble } from './MessageBubble';
@@ -173,9 +174,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col bg-[#09090c] select-text relative overflow-hidden min-h-0">
-      {/* Sleek Minimalist Top Header for Chat Panel (No harsh borders, soft dark gradient) */}
-      <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#111116] to-[#09090c] shadow-xs sticky top-0 z-20">
+    <div className="w-full h-full flex-1 flex flex-col bg-[#09090c] select-text relative overflow-hidden min-h-0">
+      {/* Fixed Top Header for Chat Panel */}
+      <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-gradient-to-b from-[#111116] to-[#09090c] shadow-xs z-20">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-full bg-red-600/20 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-red-400" />
@@ -249,13 +250,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Active Tool Calls Panel — AI agent file/terminal operations */}
       {activeToolCalls.length > 0 && (
-        <div className="mb-4 p-3 rounded-xl bg-zinc-900/60 border border-white/10 shadow-lg">
+        <div className="mb-4 p-3 rounded-2xl bg-gradient-to-b from-[#181822] to-[#101015] shadow-xl">
           <div className="flex items-center gap-2 mb-2">
             <Terminal className="w-4 h-4 text-zinc-400" />
             <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
               AI Agent Tool Calls
             </span>
-            <span className="ml-auto text-[10px] text-zinc-500">
+            <span className="ml-auto text-[10px] text-zinc-500 font-mono">
               {activeToolCalls.filter((t) => t.status === 'running').length} running
             </span>
           </div>
@@ -263,16 +264,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             {activeToolCalls.map((tool) => (
               <div
                 key={tool.id}
-                className={`p-2 rounded-lg border ${
+                className={`p-2.5 rounded-xl shadow-xs ${
                   tool.status === 'running'
-                    ? 'border-zinc-700 bg-zinc-900/40 animate-pulse'
+                    ? 'bg-zinc-800/60 animate-pulse'
                     : tool.status === 'completed'
-                    ? 'border-emerald-500/30 bg-emerald-950/10'
-                    : 'border-rose-500/30 bg-rose-950/10'
+                    ? 'bg-emerald-950/20'
+                    : 'bg-rose-950/20'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-mono text-zinc-400">{tool.toolName}</span>
+                  <span className="text-xs font-mono text-zinc-300">{tool.toolName}</span>
                   <span
                     className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
                       tool.status === 'running'
@@ -285,16 +286,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     {tool.status === 'running' ? 'Running' : tool.status === 'completed' ? 'Done' : 'Failed'}
                   </span>
                 </div>
-                <div className="text-xs text-zinc-300 break-all">{tool.description || JSON.stringify(tool.arguments).slice(0, 100)}</div>
+                {(tool.description || tool.arguments) && (
+                  <div className="text-xs text-zinc-300 break-all">
+                    {tool.description || (tool.arguments ? JSON.stringify(tool.arguments).slice(0, 100) : '')}
+                  </div>
+                )}
                 {tool.result && (
-                  <div className="mt-1.5 text-[10px] text-zinc-500 break-all bg-zinc-950/50 p-1.5 rounded">
-                    {typeof tool.result === 'object'
-                      ? JSON.stringify(tool.result, null, 2).slice(0, 200)
+                  <div className="mt-1.5 text-[10px] text-zinc-400 break-all bg-black/40 p-2 rounded-lg">
+                    {typeof tool.result === 'object' && tool.result !== null
+                      ? (JSON.stringify(tool.result, null, 2) || '').slice(0, 200)
                       : String(tool.result).slice(0, 200)}
                   </div>
                 )}
                 {tool.status === 'failed' && tool.result && (
-                  <div className="mt-1.5 text-[10px] text-rose-400 break-all bg-rose-950/30 p-1.5 rounded border border-rose-500/20">
+                  <div className="mt-1.5 text-[10px] text-rose-300 break-all bg-rose-950/40 p-2 rounded-lg">
                     {String(tool.result).slice(0, 200)}
                   </div>
                 )}
@@ -304,8 +309,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       )}
 
-      {/* Messages Scroll Area — message bubbles via MessageBubble (user kanan, AI kiri + ikon luar) */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-sm">
+      {/* Scrollable Chat Timeline */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3.5 sm:px-5 py-4 space-y-4 text-sm">
         {messages.length === 0 && (
           <div className="py-10 text-center space-y-4 max-w-md mx-auto flex flex-col items-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-850 text-zinc-300 text-xs font-medium shadow-md">
@@ -349,7 +354,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       </div>
 
       {/* Modern Suggestion Chips */}
-      <div className="px-4 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 bg-gradient-to-r from-[#0d0d12] via-[#09090c] to-[#0d0d12]">
+      <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 bg-gradient-to-r from-[#0d0d12] via-[#09090c] to-[#0d0d12]">
         {AI_DIRECTOR_PROMPTS.map((prompt, idx) => (
           <button
             key={idx}
@@ -363,15 +368,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         ))}
       </div>
 
-      {/* Bottom Command Center Card - Unified Prompt Box */}
-      <div className="p-3 sm:p-4 bg-gradient-to-t from-black via-[#09090d] to-[#09090c] shrink-0 z-10">
+      {/* Minimalist Floating Chat Input Box - Identical to Reference Image (Zero Border) */}
+      <div className="px-3.5 pt-1 pb-3.5 safe-pb bg-gradient-to-t from-[#09090c] to-transparent shrink-0 z-20">
         {/* Attachment Previews */}
         {attachments.length > 0 && (
-          <div className="flex items-center gap-2 mb-2.5 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-2 mb-2 overflow-x-auto no-scrollbar py-0.5">
             {attachments.map((att) => (
               <div
                 key={att.id}
-                className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full bg-zinc-800 text-xs text-zinc-200 shadow-md"
+                className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full bg-[#272730] text-xs text-zinc-200 shadow-md"
               >
                 {att.type === 'image' && att.url ? (
                   <img
@@ -395,10 +400,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         )}
 
-        {/* Unified Prompt Container Card - selalu tetap di bawah (tidak ter-scroll) */}
+        {/* Minimalist Card Box: Reference Image Mirror (No Border) */}
         <form
           onSubmit={handleSubmit}
-          className="bg-gradient-to-b from-[#181822] via-[#131319] to-[#0f0f14] rounded-3xl p-3 shadow-2xl transition-all flex flex-col gap-2.5 shrink-0 mb-2 overflow-hidden"
+          className="bg-[#1c1c22] rounded-[26px] p-3.5 shadow-2xl transition-all flex flex-col gap-2 shrink-0 overflow-hidden"
         >
           <textarea
             ref={textareaRef}
@@ -407,59 +412,75 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             value={inputText}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder="Describe a video idea and let AI do the rest..."
-            className="w-full bg-zinc-850/60 text-white text-sm sm:text-base placeholder-zinc-500 resize-none outline-none px-4 py-2.5 min-h-[42px] max-h-[140px] font-sans text-left leading-relaxed transition-[border-radius,height,background-color] duration-200 ease-out focus:bg-zinc-800/80"
+            placeholder="Make changes, add new features, ask for anything"
+            className="w-full bg-transparent text-white text-sm sm:text-base placeholder-zinc-500 resize-none outline-none px-1 py-1 min-h-[44px] max-h-[140px] font-sans text-left leading-relaxed transition-all duration-150"
             style={{
               direction: 'ltr',
               textAlign: 'left',
               unicodeBidi: 'normal',
-              borderRadius: isMultiLine ? '16px' : '9999px',
             }}
           />
 
           {/* Bottom Card Controls Row */}
           <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2">
+            {/* Left: Circular (+) Attachment button */}
+            <div className="flex items-center">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                title="Lampirkan File / Media"
-                className="tap w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 hover:text-white transition-all shrink-0 shadow-sm"
+                title="Tambahkan lampiran"
+                className="tap w-9 h-9 rounded-full bg-[#272730] hover:bg-[#343440] flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
               >
                 <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Right: [Default ⌵] pill, [🎙️] circle, [↑] circle */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Pilih Model AI"
+                className="tap h-9 px-3.5 rounded-full bg-[#272730] hover:bg-[#343440] text-zinc-200 hover:text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <span className="truncate max-w-[110px] sm:max-w-[160px]">
+                  {byokModelId ? byokModelId : 'Default'}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
               </button>
 
               <button
                 type="button"
-                onClick={onOpenSettings}
-                title="Pilih Model / Konfigurasi AI (BYOK)"
-                className="tap flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-all text-xs sm:text-sm font-semibold shadow-sm"
+                onClick={() => {
+                  textareaRef.current?.focus();
+                }}
+                title="Input Suara"
+                className="tap w-9 h-9 rounded-full bg-[#272730] hover:bg-[#343440] flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
               >
-                <span className="truncate max-w-[120px] sm:max-w-[160px]">
-                  {byokModelId ? byokModelId : 'Model ⌵'}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                <Mic className="w-4 h-4" />
               </button>
-            </div>
 
-            <div className="flex items-center gap-2">
               {isAgentWorking ? (
                 <button
                   type="button"
                   onClick={onStopAgent}
                   title="Batalkan proses"
-                  className="tap w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-500 transition-all shrink-0 shadow-lg shadow-red-950/60"
+                  className="tap w-9 h-9 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all shadow-md shadow-red-950/60"
                 >
-                  <Square className="w-4 h-4 fill-current" />
+                  <Square className="w-3.5 h-3.5 fill-current" />
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={!inputText.trim() && attachments.length === 0}
-                  title="Kirim instruksi ke AI"
-                  className="tap w-10 h-10 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-rose-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 text-white flex items-center justify-center transition-all shrink-0 shadow-lg shadow-red-950/50 active:scale-95"
+                  title="Kirim instruksi"
+                  className={`tap w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    inputText.trim() || attachments.length > 0
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/40 active:scale-95'
+                      : 'bg-[#272730] text-zinc-500 cursor-not-allowed opacity-75'
+                  }`}
                 >
-                  <Sparkles className="w-5 h-5" />
+                  <ArrowUp className="w-4 h-4" />
                 </button>
               )}
             </div>
